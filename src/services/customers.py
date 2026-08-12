@@ -20,11 +20,43 @@ def get_duplicate_customer_names(session: Session) -> set[str]:
 
 
 def search_customers(session: Session, query: str | None = None) -> list[Customer]:
-    stmt = select(Customer).options(joinedload(Customer.customer_type))
+    stmt = select(Customer).options(
+        joinedload(Customer.customer_type),
+        joinedload(Customer.parent),
+    )
     if query:
         stmt = stmt.where(Customer.customer_name.ilike(f"%{query}%"))
     stmt = stmt.order_by(Customer.customer_name)
     return list(session.scalars(stmt).unique().all())
+
+
+def list_customer_choices(
+    session: Session, exclude_customer_id: int | None = None
+) -> list[tuple[int, str]]:
+    """(customer_id, customer_name) pairs, for populating parent-account pickers."""
+    stmt = select(Customer.customer_id, Customer.customer_name).order_by(Customer.customer_name)
+    if exclude_customer_id is not None:
+        stmt = stmt.where(Customer.customer_id != exclude_customer_id)
+    return [tuple(row) for row in session.execute(stmt).all()]
+
+
+def create_customer(session: Session, **fields) -> Customer:
+    customer = Customer(**fields)
+    session.add(customer)
+    session.commit()
+    session.refresh(customer)
+    return customer
+
+
+def update_customer(session: Session, customer_id: int, **fields) -> Customer | None:
+    customer = session.get(Customer, customer_id)
+    if customer is None:
+        return None
+    for key, value in fields.items():
+        setattr(customer, key, value)
+    session.commit()
+    session.refresh(customer)
+    return customer
 
 
 def get_customer(session: Session, customer_id: int) -> Customer | None:
