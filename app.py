@@ -4,7 +4,6 @@ from src.pages_app.customers import customers_page
 
 st.set_page_config(
     page_title="Treehouse Originals",
-    page_icon="🌳",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -27,7 +26,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-customers = st.Page(customers_page, title="Customers", icon="📇", url_path="customers", default=True)
+customers = st.Page(customers_page, title="Customers", url_path="customers", default=True)
 
 # Build the nav ourselves (position="hidden") so the sidebar always renders,
 # rather than relying on Streamlit's auto nav widget, which hides itself
@@ -35,6 +34,6 @@ customers = st.Page(customers_page, title="Customers", icon="📇", url_path="cu
 pg = st.navigation({"Customers": [customers]}, position="hidden")
 
 with st.sidebar:
-    st.page_link(customers, label="Customers", icon="📇")
+    st.page_link(customers, label="Customers")
 
 pg.run()
