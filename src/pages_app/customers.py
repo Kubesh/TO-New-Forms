@@ -4,11 +4,14 @@ import streamlit as st
 
 from src.db import session_scope
 from src.services.customers import (
+    count_customers,
     create_customer,
     get_customer,
     get_duplicate_customer_names,
     list_customer_choices,
     list_customer_types,
+    list_distinct_chain_names,
+    list_distinct_shipping_states,
     search_customers,
     update_customer,
 )
@@ -21,6 +24,8 @@ ADDRESS_FIELDS = (
     "postal_code",
     "country",
 )
+
+PAGE_SIZE = 25
 
 CARD_CSS = """
 <style>
@@ -121,8 +126,54 @@ def _render_list() -> None:
 
     try:
         with session_scope() as session:
-            customers = search_customers(session, query)
-            duplicate_names = get_duplicate_customer_names(session)
+            type_choices = list_customer_types(session)
+            state_choices = list_distinct_shipping_states(session)
+            chain_choices = list_distinct_chain_names(session)
+    except RuntimeError as exc:
+        st.error(str(exc))
+        return
+
+    col_type, col_state, col_chain = st.columns(3)
+    with col_type:
+        type_choice = st.selectbox("Account type", ["All types"] + [t.name for t in type_choices])
+    with col_state:
+        state_choice = st.selectbox("Shipping state", ["All states"] + state_choices)
+    with col_chain:
+        chain_choice = st.selectbox("Chain name", ["All chains"] + chain_choices)
+
+    type_id = None
+    if type_choice != "All types":
+        type_id = next(t.customer_type_id for t in type_choices if t.name == type_choice)
+    shipping_state = None if state_choice == "All states" else state_choice
+    chain_name = None if chain_choice == "All chains" else chain_choice
+
+    filters_key = (query, type_id, shipping_state, chain_name)
+    if st.session_state.get("customer_filters_key") != filters_key:
+        st.session_state["customer_filters_key"] = filters_key
+        st.session_state["customer_page"] = 1
+    page = st.session_state.get("customer_page", 1)
+
+    try:
+        with session_scope() as session:
+            total = count_customers(session, query, type_id, shipping_state, chain_name)
+            total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+            page = min(max(page, 1), total_pages)
+            st.session_state["customer_page"] = page
+
+            if total:
+                customers = search_customers(
+                    session,
+                    query,
+                    type_id,
+                    shipping_state,
+                    chain_name,
+                    limit=PAGE_SIZE,
+                    offset=(page - 1) * PAGE_SIZE,
+                )
+                duplicate_names = get_duplicate_customer_names(session)
+            else:
+                customers = []
+                duplicate_names = set()
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -138,6 +189,29 @@ def _render_list() -> None:
         f'{CARD_CSS}<div class="customer-card-list">{cards_html}</div>',
         unsafe_allow_html=True,
     )
+
+    _render_pagination(page, total_pages, total)
+
+
+def _render_pagination(page: int, total_pages: int, total: int) -> None:
+    start = (page - 1) * PAGE_SIZE + 1
+    end = min(page * PAGE_SIZE, total)
+    col_prev, col_info, col_next = st.columns([1, 2, 1])
+    with col_prev:
+        if st.button("← Previous", disabled=page <= 1, use_container_width=True):
+            st.session_state["customer_page"] = page - 1
+            st.rerun()
+    with col_info:
+        st.markdown(
+            f'<div style="text-align:center; padding-top: 0.4rem;">'
+            f"Showing {start}–{end} of {total} · Page {page} of {total_pages}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with col_next:
+        if st.button("Next →", disabled=page >= total_pages, use_container_width=True):
+            st.session_state["customer_page"] = page + 1
+            st.rerun()
 
 
 def _card_html(customer, is_duplicate: bool) -> str:

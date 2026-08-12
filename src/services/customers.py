@@ -19,15 +19,79 @@ def get_duplicate_customer_names(session: Session) -> set[str]:
     return set(session.scalars(stmt).all())
 
 
-def search_customers(session: Session, query: str | None = None) -> list[Customer]:
+def _apply_customer_filters(
+    stmt,
+    query: str | None = None,
+    customer_type_id: int | None = None,
+    shipping_state: str | None = None,
+    chain_name: str | None = None,
+):
+    if query:
+        stmt = stmt.where(Customer.customer_name.ilike(f"%{query}%"))
+    if customer_type_id is not None:
+        stmt = stmt.where(Customer.customer_type_id == customer_type_id)
+    if shipping_state:
+        stmt = stmt.where(Customer.shipping_state == shipping_state)
+    if chain_name:
+        stmt = stmt.where(Customer.notes == chain_name)
+    return stmt
+
+
+def count_customers(
+    session: Session,
+    query: str | None = None,
+    customer_type_id: int | None = None,
+    shipping_state: str | None = None,
+    chain_name: str | None = None,
+) -> int:
+    stmt = _apply_customer_filters(
+        select(func.count()).select_from(Customer),
+        query,
+        customer_type_id,
+        shipping_state,
+        chain_name,
+    )
+    return session.scalar(stmt) or 0
+
+
+def search_customers(
+    session: Session,
+    query: str | None = None,
+    customer_type_id: int | None = None,
+    shipping_state: str | None = None,
+    chain_name: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Customer]:
     stmt = select(Customer).options(
         joinedload(Customer.customer_type),
         joinedload(Customer.parent),
     )
-    if query:
-        stmt = stmt.where(Customer.customer_name.ilike(f"%{query}%"))
+    stmt = _apply_customer_filters(stmt, query, customer_type_id, shipping_state, chain_name)
     stmt = stmt.order_by(Customer.customer_name)
+    if limit is not None:
+        stmt = stmt.limit(limit).offset(offset)
     return list(session.scalars(stmt).unique().all())
+
+
+def list_distinct_shipping_states(session: Session) -> list[str]:
+    stmt = (
+        select(Customer.shipping_state)
+        .where(Customer.shipping_state.isnot(None))
+        .distinct()
+        .order_by(Customer.shipping_state)
+    )
+    return list(session.scalars(stmt).all())
+
+
+def list_distinct_chain_names(session: Session) -> list[str]:
+    stmt = (
+        select(Customer.notes)
+        .where(Customer.notes.isnot(None))
+        .distinct()
+        .order_by(Customer.notes)
+    )
+    return list(session.scalars(stmt).all())
 
 
 def list_customer_choices(
