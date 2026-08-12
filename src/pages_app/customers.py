@@ -282,8 +282,66 @@ def _render_customer_form(default: dict, type_choices, parent_choices, key_prefi
         "Notes", value=default.get("notes") or "", max_chars=100, key=f"{key_prefix}_notes"
     )
 
-    col1, col2 = st.columns(2)
-    with col1:
+    st.markdown("**Shipping address**")
+    shipping_address_line1 = st.text_input(
+        "Address line 1",
+        value=default.get("shipping_address_line1") or "",
+        max_chars=255,
+        key=f"{key_prefix}_shipping_address_line1",
+    )
+    shipping_address_line2 = st.text_input(
+        "Address line 2",
+        value=default.get("shipping_address_line2") or "",
+        max_chars=255,
+        key=f"{key_prefix}_shipping_address_line2",
+    )
+    shipping_city = st.text_input(
+        "City",
+        value=default.get("shipping_city") or "",
+        max_chars=120,
+        key=f"{key_prefix}_shipping_city",
+    )
+    shipping_state = st.text_input(
+        "State",
+        value=default.get("shipping_state") or "",
+        max_chars=120,
+        key=f"{key_prefix}_shipping_state",
+    )
+    shipping_postal_code = st.text_input(
+        "Postal code",
+        value=default.get("shipping_postal_code") or "",
+        max_chars=20,
+        key=f"{key_prefix}_shipping_postal_code",
+    )
+    shipping_country = st.text_input(
+        "Country",
+        value=default.get("shipping_country") or "",
+        max_chars=120,
+        key=f"{key_prefix}_shipping_country",
+    )
+
+    shipping_fields = dict(
+        address_line1=shipping_address_line1.strip() or None,
+        address_line2=shipping_address_line2.strip() or None,
+        city=shipping_city.strip() or None,
+        state=shipping_state.strip() or None,
+        postal_code=shipping_postal_code.strip() or None,
+        country=shipping_country.strip() or None,
+    )
+
+    billing_default_tuple = tuple(default.get(f"billing_{f}") for f in ADDRESS_FIELDS)
+    shipping_default_tuple = tuple(default.get(f"shipping_{f}") for f in ADDRESS_FIELDS)
+    same_as_shipping_default = billing_default_tuple == shipping_default_tuple
+
+    same_as_shipping = st.checkbox(
+        "Billing address same as shipping",
+        value=same_as_shipping_default,
+        key=f"{key_prefix}_billing_same_as_shipping",
+    )
+
+    if same_as_shipping:
+        billing_fields = dict(shipping_fields)
+    else:
         st.markdown("**Billing address**")
         billing_address_line1 = st.text_input(
             "Address line 1",
@@ -321,43 +379,13 @@ def _render_customer_form(default: dict, type_choices, parent_choices, key_prefi
             max_chars=120,
             key=f"{key_prefix}_billing_country",
         )
-    with col2:
-        st.markdown("**Shipping address**")
-        shipping_address_line1 = st.text_input(
-            "Address line 1",
-            value=default.get("shipping_address_line1") or "",
-            max_chars=255,
-            key=f"{key_prefix}_shipping_address_line1",
-        )
-        shipping_address_line2 = st.text_input(
-            "Address line 2",
-            value=default.get("shipping_address_line2") or "",
-            max_chars=255,
-            key=f"{key_prefix}_shipping_address_line2",
-        )
-        shipping_city = st.text_input(
-            "City",
-            value=default.get("shipping_city") or "",
-            max_chars=120,
-            key=f"{key_prefix}_shipping_city",
-        )
-        shipping_state = st.text_input(
-            "State",
-            value=default.get("shipping_state") or "",
-            max_chars=120,
-            key=f"{key_prefix}_shipping_state",
-        )
-        shipping_postal_code = st.text_input(
-            "Postal code",
-            value=default.get("shipping_postal_code") or "",
-            max_chars=20,
-            key=f"{key_prefix}_shipping_postal_code",
-        )
-        shipping_country = st.text_input(
-            "Country",
-            value=default.get("shipping_country") or "",
-            max_chars=120,
-            key=f"{key_prefix}_shipping_country",
+        billing_fields = dict(
+            address_line1=billing_address_line1.strip() or None,
+            address_line2=billing_address_line2.strip() or None,
+            city=billing_city.strip() or None,
+            state=billing_state.strip() or None,
+            postal_code=billing_postal_code.strip() or None,
+            country=billing_country.strip() or None,
         )
 
     return dict(
@@ -365,18 +393,18 @@ def _render_customer_form(default: dict, type_choices, parent_choices, key_prefi
         customer_type_id=customer_type_id,
         parent_id=parent_id,
         notes=notes.strip() or None,
-        billing_address_line1=billing_address_line1.strip() or None,
-        billing_address_line2=billing_address_line2.strip() or None,
-        billing_city=billing_city.strip() or None,
-        billing_state=billing_state.strip() or None,
-        billing_postal_code=billing_postal_code.strip() or None,
-        billing_country=billing_country.strip() or None,
-        shipping_address_line1=shipping_address_line1.strip() or None,
-        shipping_address_line2=shipping_address_line2.strip() or None,
-        shipping_city=shipping_city.strip() or None,
-        shipping_state=shipping_state.strip() or None,
-        shipping_postal_code=shipping_postal_code.strip() or None,
-        shipping_country=shipping_country.strip() or None,
+        billing_address_line1=billing_fields["address_line1"],
+        billing_address_line2=billing_fields["address_line2"],
+        billing_city=billing_fields["city"],
+        billing_state=billing_fields["state"],
+        billing_postal_code=billing_fields["postal_code"],
+        billing_country=billing_fields["country"],
+        shipping_address_line1=shipping_fields["address_line1"],
+        shipping_address_line2=shipping_fields["address_line2"],
+        shipping_city=shipping_fields["city"],
+        shipping_state=shipping_fields["state"],
+        shipping_postal_code=shipping_fields["postal_code"],
+        shipping_country=shipping_fields["country"],
     )
 
 
@@ -409,25 +437,19 @@ def edit_customer_dialog(customer_id: int) -> None:
         shipping_postal_code=customer.shipping_postal_code,
         shipping_country=customer.shipping_country,
     )
-    with st.form(key="edit_customer_form", border=False):
-        values = _render_customer_form(default, type_choices, parent_choices, key_prefix="edit")
-        col_save, col_cancel = st.columns(2)
-        with col_save:
-            save_clicked = st.form_submit_button(
-                "Save", type="primary", use_container_width=True
-            )
-        with col_cancel:
-            cancel_clicked = st.form_submit_button("Cancel", use_container_width=True)
-
-    if save_clicked:
-        if not values["customer_name"]:
-            st.error("Customer name is required.")
-        else:
-            with session_scope() as session:
-                update_customer(session, customer_id, **values)
+    values = _render_customer_form(default, type_choices, parent_choices, key_prefix="edit")
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+        if st.button("Save", type="primary", use_container_width=True, key="edit_save_btn"):
+            if not values["customer_name"]:
+                st.error("Customer name is required.")
+            else:
+                with session_scope() as session:
+                    update_customer(session, customer_id, **values)
+                st.rerun()
+    with col_cancel:
+        if st.button("Cancel", use_container_width=True, key="edit_cancel_btn"):
             st.rerun()
-    elif cancel_clicked:
-        st.rerun()
 
 
 @st.dialog("Add customer", width="large")
@@ -436,23 +458,17 @@ def add_customer_dialog() -> None:
         type_choices = [(t.customer_type_id, t.name) for t in list_customer_types(session)]
         parent_choices = list_customer_choices(session)
 
-    with st.form(key="add_customer_form", border=False):
-        values = _render_customer_form({}, type_choices, parent_choices, key_prefix="add")
-        col_save, col_cancel = st.columns(2)
-        with col_save:
-            save_clicked = st.form_submit_button(
-                "Save", type="primary", use_container_width=True
-            )
-        with col_cancel:
-            cancel_clicked = st.form_submit_button("Cancel", use_container_width=True)
-
-    if save_clicked:
-        if not values["customer_name"]:
-            st.error("Customer name is required.")
-        else:
-            with session_scope() as session:
-                new_customer = create_customer(session, **values)
-            st.query_params["customer_id"] = str(new_customer.customer_id)
+    values = _render_customer_form({}, type_choices, parent_choices, key_prefix="add")
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+        if st.button("Save", type="primary", use_container_width=True, key="add_save_btn"):
+            if not values["customer_name"]:
+                st.error("Customer name is required.")
+            else:
+                with session_scope() as session:
+                    new_customer = create_customer(session, **values)
+                st.query_params["customer_id"] = str(new_customer.customer_id)
+                st.rerun()
+    with col_cancel:
+        if st.button("Cancel", use_container_width=True, key="add_cancel_btn"):
             st.rerun()
-    elif cancel_clicked:
-        st.rerun()
