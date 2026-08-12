@@ -125,6 +125,7 @@ class PurchaseOrderLineItem(Base, TimestampMixin):
     sku: Mapped[str | None] = mapped_column(String(50))
     item_description: Mapped[str | None] = mapped_column(Text)
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    original_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     expanded_weight: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     box: Mapped[str | None] = mapped_column(String(50))
     shopify_item_number: Mapped[str | None] = mapped_column(String(50))

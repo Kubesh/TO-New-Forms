@@ -212,13 +212,15 @@ def import_line_items(session, line_rows: list[dict], po_id_by_number: dict[str,
         po_id = po_id_by_number[po_number]
         for row in po_rows:
             sku = row["SKU"].strip()
+            quantity = parse_decimal(row.get("Quantity")) or Decimal("0")
             session.add(
                 PurchaseOrderLineItem(
                     po_id=po_id,
                     item_id=item_id_by_sku.get(sku),
                     sku=sku,
                     item_description=clean(row.get("Item Description")),
-                    quantity=parse_decimal(row.get("Quantity")) or Decimal("0"),
+                    quantity=quantity,
+                    original_quantity=quantity,
                     expanded_weight=parse_decimal(row.get("Expanded Weight")),
                     box=clean(row.get("Box")),
                     shopify_item_number=parse_shopify_number(row.get("Shopify Item #")),
