@@ -31,12 +31,12 @@ CARD_CSS = """
     color: inherit !important;
     text-decoration: none !important;
 }
+.customer-card-list {
+    padding-top: 0.75rem;
+}
 .customer-card-link {
     display: block;
     margin-bottom: 0.75rem;
-}
-.customer-card-link:first-child {
-    margin-top: 0.75rem;
 }
 .customer-card {
     border: 1px solid rgba(128, 128, 128, 0.35);
@@ -131,11 +131,13 @@ def _render_list() -> None:
         st.info("No customers found.")
         return
 
-    st.markdown(CARD_CSS, unsafe_allow_html=True)
     cards_html = "".join(
         _card_html(customer, customer.customer_name in duplicate_names) for customer in customers
     )
-    st.markdown(cards_html, unsafe_allow_html=True)
+    st.markdown(
+        f'{CARD_CSS}<div class="customer-card-list">{cards_html}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _card_html(customer, is_duplicate: bool) -> str:
