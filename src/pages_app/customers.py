@@ -35,6 +35,9 @@ CARD_CSS = """
     display: block;
     margin-bottom: 0.75rem;
 }
+.customer-card-link:first-child {
+    margin-top: 0.75rem;
+}
 .customer-card {
     border: 1px solid rgba(128, 128, 128, 0.35);
     border-radius: 0.5rem;
