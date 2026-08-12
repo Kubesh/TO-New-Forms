@@ -1,7 +1,7 @@
 import streamlit as st
 
 from src.db import session_scope
-from src.services.customers import get_customer, search_customers
+from src.services.customers import get_customer, get_duplicate_customer_names, search_customers
 
 ADDRESS_FIELDS = (
     "address_line1",
@@ -29,6 +29,7 @@ def customers_page() -> None:
     try:
         with session_scope() as session:
             customers = search_customers(session, query)
+            duplicate_names = get_duplicate_customer_names(session)
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -43,13 +44,15 @@ def customers_page() -> None:
         cols = st.columns(cols_per_row)
         for col, customer in zip(cols, row):
             with col:
-                _render_card(customer)
+                _render_card(customer, is_duplicate=customer.customer_name in duplicate_names)
 
 
-def _render_card(customer) -> None:
+def _render_card(customer, is_duplicate: bool) -> None:
     with st.container(border=True):
         st.subheader(customer.customer_name)
         st.caption(customer.customer_type.name if customer.customer_type else "No type")
+        if is_duplicate:
+            st.badge("Duplicate name", color="orange")
 
         city = customer.billing_city or customer.shipping_city
         state = customer.billing_state or customer.shipping_state
@@ -65,6 +68,7 @@ def _render_card(customer) -> None:
 def _render_detail(customer_id: int) -> None:
     with session_scope() as session:
         customer = get_customer(session, customer_id)
+        duplicate_names = get_duplicate_customer_names(session)
 
     if not customer:
         st.warning("Customer not found.")
@@ -79,6 +83,8 @@ def _render_detail(customer_id: int) -> None:
 
     st.header(customer.customer_name)
     st.caption(customer.customer_type.name if customer.customer_type else "No type")
+    if customer.customer_name in duplicate_names:
+        st.badge("Duplicate name - another customer shares this name", color="orange")
     if customer.parent:
         st.write(f"Parent account: **{customer.parent.customer_name}**")
 

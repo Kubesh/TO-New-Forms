@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from src.models import Customer, CustomerContact, CustomerType
@@ -7,6 +7,16 @@ from src.models import Customer, CustomerContact, CustomerType
 def list_customer_types(session: Session) -> list[CustomerType]:
     stmt = select(CustomerType).order_by(CustomerType.name)
     return list(session.scalars(stmt).all())
+
+
+def get_duplicate_customer_names(session: Session) -> set[str]:
+    """Customer names that appear on more than one customer record."""
+    stmt = (
+        select(Customer.customer_name)
+        .group_by(Customer.customer_name)
+        .having(func.count() > 1)
+    )
+    return set(session.scalars(stmt).all())
 
 
 def search_customers(session: Session, query: str | None = None) -> list[Customer]:
