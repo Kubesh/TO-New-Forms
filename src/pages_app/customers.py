@@ -139,7 +139,7 @@ def _render_list() -> None:
             label_visibility="collapsed",
         )
     with col_add:
-        if st.button("Add customer", use_container_width=True):
+        if st.button("Add customer", width="stretch"):
             add_customer_dialog()
 
     try:
@@ -225,7 +225,7 @@ def _render_pagination(page: int, total_pages: int, total: int) -> None:
     end = min(page * PAGE_SIZE, total)
     col_prev, col_info, col_next = st.columns([1, 2, 1])
     with col_prev:
-        if st.button("← Previous", disabled=page <= 1, use_container_width=True):
+        if st.button("← Previous", disabled=page <= 1, width="stretch"):
             st.session_state["customer_page"] = page - 1
             st.rerun()
     with col_info:
@@ -236,7 +236,7 @@ def _render_pagination(page: int, total_pages: int, total: int) -> None:
             unsafe_allow_html=True,
         )
     with col_next:
-        if st.button("Next →", disabled=page >= total_pages, use_container_width=True):
+        if st.button("Next →", disabled=page >= total_pages, width="stretch"):
             st.session_state["customer_page"] = page + 1
             st.rerun()
 
@@ -302,7 +302,7 @@ def _render_detail(customer_id: int) -> None:
             st.query_params.clear()
             st.rerun()
     with col_edit:
-        if st.button("Edit customer", use_container_width=True):
+        if st.button("Edit customer", width="stretch"):
             edit_customer_dialog(customer.customer_id)
 
     st.header(customer.customer_name)
@@ -343,9 +343,7 @@ def _render_detail(customer_id: int) -> None:
 
     st.subheader("Purchase Orders")
     if purchase_orders:
-        render_po_table(
-            purchase_orders, po_stats, show_customer=False, href_base="/purchase-orders"
-        )
+        render_po_table(purchase_orders, po_stats, href_base="/purchase-orders")
     else:
         st.write("No purchase orders on file.")
 
@@ -572,7 +570,7 @@ def edit_customer_dialog(customer_id: int) -> None:
     values = _render_customer_form(default, type_choices, parent_choices, key_prefix="edit")
     col_save, col_cancel = st.columns(2)
     with col_save:
-        if st.button("Save", type="primary", use_container_width=True, key="edit_save_btn"):
+        if st.button("Save", type="primary", width="stretch", key="edit_save_btn"):
             if not values["customer_name"]:
                 st.error("Customer name is required.")
             else:
@@ -580,7 +578,7 @@ def edit_customer_dialog(customer_id: int) -> None:
                     update_customer(session, customer_id, **values)
                 st.rerun()
     with col_cancel:
-        if st.button("Cancel", use_container_width=True, key="edit_cancel_btn"):
+        if st.button("Cancel", width="stretch", key="edit_cancel_btn"):
             st.rerun()
 
 
@@ -593,7 +591,7 @@ def add_customer_dialog() -> None:
     values = _render_customer_form({}, type_choices, parent_choices, key_prefix="add")
     col_save, col_cancel = st.columns(2)
     with col_save:
-        if st.button("Save", type="primary", use_container_width=True, key="add_save_btn"):
+        if st.button("Save", type="primary", width="stretch", key="add_save_btn"):
             if not values["customer_name"]:
                 st.error("Customer name is required.")
             else:
@@ -602,5 +600,5 @@ def add_customer_dialog() -> None:
                 st.query_params["customer_id"] = str(new_customer.customer_id)
                 st.rerun()
     with col_cancel:
-        if st.button("Cancel", use_container_width=True, key="add_cancel_btn"):
+        if st.button("Cancel", width="stretch", key="add_cancel_btn"):
             st.rerun()

@@ -41,10 +41,11 @@ def list_purchase_orders_for_customer(
 ) -> list[PurchaseOrder]:
     stmt = (
         select(PurchaseOrder)
+        .options(joinedload(PurchaseOrder.customer))
         .where(PurchaseOrder.customer_id == customer_id)
         .order_by(PurchaseOrder.order_date.desc().nulls_last(), PurchaseOrder.po_number)
     )
-    return list(session.scalars(stmt).all())
+    return list(session.scalars(stmt).unique().all())
 
 
 def get_purchase_order(session: Session, po_id: int) -> PurchaseOrder | None:
