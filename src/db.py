@@ -9,6 +9,15 @@ from sqlalchemy.orm import Session, sessionmaker
 load_dotenv()
 
 
+def normalize_database_url(url: str) -> str:
+    """Force the psycopg (v3) driver regardless of the scheme the URL was copied with."""
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
+
+
 @st.cache_resource
 def get_engine():
     database_url = os.environ.get("DATABASE_URL")
@@ -17,7 +26,7 @@ def get_engine():
             "DATABASE_URL is not set. Copy .env.example to .env and add your Neon "
             "connection string."
         )
-    return create_engine(database_url, pool_pre_ping=True)
+    return create_engine(normalize_database_url(database_url), pool_pre_ping=True)
 
 
 @contextmanager

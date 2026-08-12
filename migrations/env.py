@@ -8,6 +8,7 @@ from sqlalchemy import engine_from_config, pool
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from src.db import normalize_database_url  # noqa: E402
 from src.models import Base  # noqa: E402
 
 load_dotenv()
@@ -16,7 +17,7 @@ config = context.config
 
 database_url = os.environ.get("DATABASE_URL")
 if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+    config.set_main_option("sqlalchemy.url", normalize_database_url(database_url))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
