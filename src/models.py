@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import ForeignKey, String, Text, func
+from sqlalchemy import ForeignKey, Numeric, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -74,3 +75,59 @@ class CustomerContact(Base, TimestampMixin):
     contact_notes: Mapped[str | None] = mapped_column(Text)
 
     customer: Mapped["Customer"] = relationship(back_populates="contacts")
+
+
+class Item(Base, TimestampMixin):
+    __tablename__ = "items"
+
+    item_id: Mapped[int] = mapped_column(primary_key=True)
+    sku: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[str | None] = mapped_column(String(100))
+    subcategory: Mapped[str | None] = mapped_column(String(100))
+    search_terms: Mapped[str | None] = mapped_column(Text)
+    measured_in: Mapped[str | None] = mapped_column(String(50))
+    unit_weight_lb: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    sellable_content_weight_lb: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    shopify_item_number: Mapped[str | None] = mapped_column(String(50))
+    shopify_variant_number: Mapped[str | None] = mapped_column(String(50))
+
+    line_items: Mapped[list["PurchaseOrderLineItem"]] = relationship(back_populates="item")
+
+
+class PurchaseOrder(Base, TimestampMixin):
+    __tablename__ = "po_headers"
+
+    po_id: Mapped[int] = mapped_column(primary_key=True)
+    po_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.customer_id"))
+    store_key: Mapped[int | None] = mapped_column()
+    account_type: Mapped[str | None] = mapped_column(String(50))
+    order_date: Mapped[date | None] = mapped_column()
+    due_date: Mapped[date | None] = mapped_column()
+    ship_date: Mapped[date | None] = mapped_column()
+    order_entry_timestamp: Mapped[datetime | None] = mapped_column()
+    note: Mapped[str | None] = mapped_column(Text)
+    voided: Mapped[bool] = mapped_column(default=False, server_default="false")
+
+    customer: Mapped["Customer | None"] = relationship()
+    line_items: Mapped[list["PurchaseOrderLineItem"]] = relationship(
+        back_populates="purchase_order", cascade="all, delete-orphan"
+    )
+
+
+class PurchaseOrderLineItem(Base, TimestampMixin):
+    __tablename__ = "po_line_items"
+
+    line_item_id: Mapped[int] = mapped_column(primary_key=True)
+    po_id: Mapped[int] = mapped_column(ForeignKey("po_headers.po_id"), nullable=False)
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("items.item_id"))
+    sku: Mapped[str | None] = mapped_column(String(50))
+    item_description: Mapped[str | None] = mapped_column(Text)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    expanded_weight: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    box: Mapped[str | None] = mapped_column(String(50))
+    shopify_item_number: Mapped[str | None] = mapped_column(String(50))
+
+    purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="line_items")
+    item: Mapped["Item | None"] = relationship(back_populates="line_items")

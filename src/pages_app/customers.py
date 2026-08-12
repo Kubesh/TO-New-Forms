@@ -15,6 +15,7 @@ from src.services.customers import (
     search_customers,
     update_customer,
 )
+from src.services.purchase_orders import list_purchase_orders_for_customer
 
 ADDRESS_FIELDS = (
     "address_line1",
@@ -94,6 +95,44 @@ CARD_CSS = """
 }
 </style>
 """
+
+PO_LINK_CSS = """
+<style>
+.po-link-row {
+    display: block;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+    text-decoration: none !important;
+    color: inherit !important;
+}
+.po-link-row:hover {
+    opacity: 0.75;
+}
+.po-link-number {
+    font-weight: 600;
+}
+.po-link-voided {
+    color: #b91c1c !important;
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+</style>
+"""
+
+
+def _po_link_html(po) -> str:
+    number = html.escape(po.po_number)
+    bits = [f'<span class="po-link-number">{number}</span>']
+    if po.order_date:
+        bits.append(f" — {po.order_date.isoformat()}")
+    if po.account_type:
+        bits.append(f" — {html.escape(po.account_type)}")
+    if po.voided:
+        bits.append('<span class="po-link-voided">Voided</span>')
+    return (
+        f'<a class="po-link-row" href="/purchase-orders?po_id={po.po_id}" target="_self">'
+        f'{"".join(bits)}</a>'
+    )
 
 
 def customers_page() -> None:
@@ -254,6 +293,9 @@ def _render_detail(customer_id: int) -> None:
     with session_scope() as session:
         customer = get_customer(session, customer_id)
         duplicate_names = get_duplicate_customer_names(session)
+        purchase_orders = (
+            list_purchase_orders_for_customer(session, customer_id) if customer else []
+        )
 
     if not customer:
         st.warning("Customer not found.")
@@ -306,6 +348,14 @@ def _render_detail(customer_id: int) -> None:
         st.subheader("Sub-accounts")
         for child in customer.children:
             st.write(f"- {child.customer_name}")
+
+    st.subheader("Purchase Orders")
+    if purchase_orders:
+        st.markdown(PO_LINK_CSS, unsafe_allow_html=True)
+        for po in purchase_orders:
+            st.markdown(_po_link_html(po), unsafe_allow_html=True)
+    else:
+        st.write("No purchase orders on file.")
 
 
 def _render_address(customer, prefix: str) -> None:
