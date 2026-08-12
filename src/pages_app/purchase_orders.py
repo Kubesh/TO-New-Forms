@@ -55,9 +55,14 @@ PO_CARD_CSS = """
 .po-table-header,
 .po-row-grid {
     display: grid;
-    grid-template-columns: 110px 150px 100px 100px 1fr;
     gap: 0.75rem;
     align-items: center;
+}
+.po-cols-5 {
+    grid-template-columns: 110px 150px 100px 100px 1fr;
+}
+.po-cols-6 {
+    grid-template-columns: 110px 150px 1fr 100px 100px 140px;
 }
 .po-table-header {
     padding: 0 1.25rem;
@@ -176,16 +181,7 @@ def _render_list() -> None:
         st.info("No purchase orders found.")
         return
 
-    header = (
-        '<div class="po-table-header">'
-        "<div>PO Date</div><div>PO Number</div><div>Total SKUs</div>"
-        "<div>Total Units</div><div>Order Type</div></div>"
-    )
-    cards_html = "".join(_po_row_html(po, stats.get(po.po_id)) for po in purchase_orders)
-    st.markdown(
-        f'{PO_CARD_CSS}{header}<div class="po-card-list">{cards_html}</div>',
-        unsafe_allow_html=True,
-    )
+    render_po_table(purchase_orders, stats, show_customer=True)
 
     _render_pagination(page, total_pages, total)
 
@@ -213,7 +209,42 @@ def _render_pagination(page: int, total_pages: int, total: int) -> None:
             st.rerun()
 
 
-def _po_row_html(po, stats) -> str:
+def render_po_table(
+    purchase_orders,
+    stats_by_po_id: dict,
+    show_customer: bool,
+    href_base: str = "",
+) -> None:
+    """Shared PO list markup, used by both the Purchase Orders page and the
+    customer detail page's Purchase Orders section, so the two always match.
+
+    href_base is prepended to each row's link - "" for same-page navigation
+    (the PO list page itself), "/purchase-orders" for linking in from a
+    different page (e.g. the customer detail page).
+    """
+    cols_class = "po-cols-6" if show_customer else "po-cols-5"
+
+    header_labels = ["PO Date", "PO Number"]
+    if show_customer:
+        header_labels.append("Customer")
+    header_labels += ["Total SKUs", "Total Units", "Order Type"]
+    header = (
+        f'<div class="po-table-header {cols_class}">'
+        + "".join(f"<div>{label}</div>" for label in header_labels)
+        + "</div>"
+    )
+
+    rows_html = "".join(
+        _po_row_html(po, stats_by_po_id.get(po.po_id), show_customer, cols_class, href_base)
+        for po in purchase_orders
+    )
+    st.markdown(
+        f'{PO_CARD_CSS}{header}<div class="po-card-list">{rows_html}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _po_row_html(po, stats, show_customer: bool, cols_class: str, href_base: str) -> str:
     number = html.escape(po.po_number)
     total_skus, total_units = stats if stats else (0, None)
 
@@ -225,18 +256,21 @@ def _po_row_html(po, stats) -> str:
     if po.voided:
         type_cell.append('<span class="po-badge po-badge-voided">Voided</span>')
 
-    row = (
-        f'<div class="po-row-grid">'
-        f'<div>{po.order_date.isoformat() if po.order_date else "—"}</div>'
-        f'<div class="po-row-number">{number}</div>'
-        f'<div>{total_skus}</div>'
-        f'<div>{_format_quantity(total_units)}</div>'
-        f'<div class="po-row-type-cell">{"".join(type_cell)}</div>'
-        f"</div>"
-    )
+    cells = [
+        f'<div>{po.order_date.isoformat() if po.order_date else "—"}</div>',
+        f'<div class="po-row-number">{number}</div>',
+    ]
+    if show_customer:
+        customer_name = html.escape(po.customer.customer_name) if po.customer else "—"
+        cells.append(f"<div>{customer_name}</div>")
+    cells.append(f"<div>{total_skus}</div>")
+    cells.append(f"<div>{_format_quantity(total_units)}</div>")
+    cells.append(f'<div class="po-row-type-cell">{"".join(type_cell)}</div>')
+
+    row = f'<div class="po-row-grid {cols_class}">{"".join(cells)}</div>'
 
     return (
-        f'<a class="po-card-link" href="?po_id={po.po_id}" target="_self">'
+        f'<a class="po-card-link" href="{href_base}?po_id={po.po_id}" target="_self">'
         f'<div class="{card_classes}">{row}</div></a>'
     )
 
