@@ -34,6 +34,8 @@ class Customer(Base, TimestampMixin):
         ForeignKey("customer_types.customer_type_id")
     )
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("customers.customer_id"))
+    store_key: Mapped[int | None] = mapped_column()
+    notes: Mapped[str | None] = mapped_column(String(100))
 
     billing_address_line1: Mapped[str | None] = mapped_column(String(255))
     billing_address_line2: Mapped[str | None] = mapped_column(String(255))
