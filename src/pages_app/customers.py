@@ -277,6 +277,8 @@ def _render_detail(customer_id: int) -> None:
         st.badge("Duplicate name - another customer shares this name", color="orange")
     if customer.parent:
         st.write(f"Parent account: **{customer.parent.customer_name}**")
+    if customer.phone_number:
+        st.write(f"Phone: {customer.phone_number}")
     if customer.store_key is not None:
         st.caption(f"Previous store key: {customer.store_key}")
 
@@ -356,6 +358,13 @@ def _render_customer_form(default: dict, type_choices, parent_choices, key_prefi
         "Parent account", parent_names, index=parent_index, key=f"{key_prefix}_parent"
     )
     parent_id = parent_ids[parent_names.index(parent_choice)]
+
+    phone_number = st.text_input(
+        "Phone number",
+        value=default.get("phone_number") or "",
+        max_chars=25,
+        key=f"{key_prefix}_phone_number",
+    )
 
     notes = st.text_input(
         "Notes", value=default.get("notes") or "", max_chars=100, key=f"{key_prefix}_notes"
@@ -471,6 +480,7 @@ def _render_customer_form(default: dict, type_choices, parent_choices, key_prefi
         customer_name=customer_name.strip(),
         customer_type_id=customer_type_id,
         parent_id=parent_id,
+        phone_number=phone_number.strip() or None,
         notes=notes.strip() or None,
         billing_address_line1=billing_fields["address_line1"],
         billing_address_line2=billing_fields["address_line2"],
@@ -502,6 +512,7 @@ def edit_customer_dialog(customer_id: int) -> None:
         customer_name=customer.customer_name,
         customer_type_id=customer.customer_type_id,
         parent_id=customer.parent_id,
+        phone_number=customer.phone_number,
         notes=customer.notes,
         billing_address_line1=customer.billing_address_line1,
         billing_address_line2=customer.billing_address_line2,
