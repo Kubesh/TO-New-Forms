@@ -140,7 +140,7 @@ def import_headers(session, header_rows: list[dict]) -> tuple[dict[str, int], di
         fields = dict(
             customer_id=customer_id,
             store_key=store_key,
-            account_type=clean(row.get("Account Type")),
+            order_type=clean(row.get("Account Type")),
             order_date=parse_date(row.get("Order Date")),
             due_date=parse_date(row.get("Due Date")),
             ship_date=parse_date(row.get("Ship Date")),

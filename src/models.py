@@ -102,7 +102,7 @@ class PurchaseOrder(Base, TimestampMixin):
     po_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.customer_id"))
     store_key: Mapped[int | None] = mapped_column()
-    account_type: Mapped[str | None] = mapped_column(String(50))
+    order_type: Mapped[str | None] = mapped_column(String(50))
     order_date: Mapped[date | None] = mapped_column()
     due_date: Mapped[date | None] = mapped_column()
     ship_date: Mapped[date | None] = mapped_column()

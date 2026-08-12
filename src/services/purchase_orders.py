@@ -57,3 +57,33 @@ def get_purchase_order(session: Session, po_id: int) -> PurchaseOrder | None:
         .where(PurchaseOrder.po_id == po_id)
     )
     return session.scalars(stmt).unique().first()
+
+
+def get_po_line_item_stats(session: Session, po_ids) -> dict[int, tuple[int, object]]:
+    """po_id -> (distinct SKU count, total quantity) for the given POs."""
+    po_ids = list(po_ids)
+    if not po_ids:
+        return {}
+    stmt = (
+        select(
+            PurchaseOrderLineItem.po_id,
+            func.count(func.distinct(PurchaseOrderLineItem.sku)),
+            func.sum(PurchaseOrderLineItem.quantity),
+        )
+        .where(PurchaseOrderLineItem.po_id.in_(po_ids))
+        .group_by(PurchaseOrderLineItem.po_id)
+    )
+    return {po_id: (sku_count, total_units) for po_id, sku_count, total_units in session.execute(stmt)}
+
+
+def get_non_voided_po_counts(session: Session, customer_ids) -> dict[int, int]:
+    """customer_id -> count of that customer's non-voided POs."""
+    customer_ids = list(customer_ids)
+    if not customer_ids:
+        return {}
+    stmt = (
+        select(PurchaseOrder.customer_id, func.count())
+        .where(PurchaseOrder.customer_id.in_(customer_ids), PurchaseOrder.voided.is_(False))
+        .group_by(PurchaseOrder.customer_id)
+    )
+    return {customer_id: count for customer_id, count in session.execute(stmt)}

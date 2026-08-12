@@ -1,15 +1,23 @@
 import html
+from decimal import Decimal
 
 import streamlit as st
 
 from src.db import session_scope
 from src.services.purchase_orders import (
     count_purchase_orders,
+    get_po_line_item_stats,
     get_purchase_order,
     search_purchase_orders,
 )
 
 PAGE_SIZE = 25
+
+ORDER_TYPE_BADGE_CLASSES = {
+    "direct": "po-badge-direct",
+    "faire order": "po-badge-faire",
+    "distributor": "po-badge-distributor",
+}
 
 PO_CARD_CSS = """
 <style>
@@ -25,12 +33,12 @@ PO_CARD_CSS = """
 }
 .po-card-link {
     display: block;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.6rem;
 }
 .po-card {
     border: 1px solid rgba(128, 128, 128, 0.35);
     border-radius: 0.5rem;
-    padding: 1rem 1.25rem;
+    padding: 0.85rem 1.25rem;
     width: 100%;
     box-sizing: border-box;
     transition: border-color 0.15s ease;
@@ -44,12 +52,32 @@ PO_CARD_CSS = """
 .po-card-link:hover .po-card-voided {
     border-color: #991b1b;
 }
-.po-card-top {
+.po-table-header,
+.po-row-grid {
+    display: grid;
+    grid-template-columns: 110px 150px 100px 100px 1fr;
+    gap: 0.75rem;
+    align-items: center;
+}
+.po-table-header {
+    padding: 0 1.25rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    opacity: 0.55;
+}
+.po-row-number {
+    font-weight: 700;
+}
+.po-row-type-cell {
     display: flex;
     gap: 0.4rem;
-    margin-bottom: 0.35rem;
+    align-items: center;
+    flex-wrap: wrap;
 }
-.po-card-badge {
+.po-badge {
     display: inline-block;
     font-size: 0.75rem;
     font-weight: 600;
@@ -58,23 +86,42 @@ PO_CARD_CSS = """
     background: rgba(128, 128, 128, 0.18);
     color: inherit;
 }
-.po-card-badge-voided {
+.po-badge-direct {
+    background: rgba(37, 99, 235, 0.16);
+    color: #2563eb !important;
+}
+.po-badge-faire {
+    background: rgba(219, 39, 119, 0.16);
+    color: #db2777 !important;
+}
+.po-badge-distributor {
+    background: rgba(234, 88, 12, 0.16);
+    color: #ea580c !important;
+}
+.po-badge-voided {
     background: rgba(185, 28, 28, 0.2);
     color: #b91c1c !important;
 }
-.po-card-number {
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-.po-card-customer {
-    margin-top: 0.15rem;
-}
-.po-card-date {
-    margin-top: 0.25rem;
-    opacity: 0.85;
-}
 </style>
 """
+
+
+def _order_type_badge_html(order_type: str | None) -> str:
+    if not order_type:
+        return ""
+    css_class = ORDER_TYPE_BADGE_CLASSES.get(order_type.strip().lower(), "")
+    return f'<span class="po-badge {css_class}">{html.escape(order_type)}</span>'
+
+
+def _format_quantity(value) -> str:
+    if value is None:
+        return "0"
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    value = value.normalize()
+    if value == value.to_integral_value():
+        return str(int(value))
+    return str(value)
 
 
 def purchase_orders_page() -> None:
@@ -117,8 +164,10 @@ def _render_list() -> None:
                 purchase_orders = search_purchase_orders(
                     session, query, limit=PAGE_SIZE, offset=(page - 1) * PAGE_SIZE
                 )
+                stats = get_po_line_item_stats(session, [po.po_id for po in purchase_orders])
             else:
                 purchase_orders = []
+                stats = {}
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -127,9 +176,14 @@ def _render_list() -> None:
         st.info("No purchase orders found.")
         return
 
-    cards_html = "".join(_po_card_html(po) for po in purchase_orders)
+    header = (
+        '<div class="po-table-header">'
+        "<div>PO Date</div><div>PO Number</div><div>Total SKUs</div>"
+        "<div>Total Units</div><div>Order Type</div></div>"
+    )
+    cards_html = "".join(_po_row_html(po, stats.get(po.po_id)) for po in purchase_orders)
     st.markdown(
-        f'{PO_CARD_CSS}<div class="po-card-list">{cards_html}</div>',
+        f'{PO_CARD_CSS}{header}<div class="po-card-list">{cards_html}</div>',
         unsafe_allow_html=True,
     )
 
@@ -159,32 +213,32 @@ def _render_pagination(page: int, total_pages: int, total: int) -> None:
             st.rerun()
 
 
-def _po_card_html(po) -> str:
+def _po_row_html(po, stats) -> str:
     number = html.escape(po.po_number)
-    customer_name = html.escape(po.customer.customer_name) if po.customer else "No linked customer"
+    total_skus, total_units = stats if stats else (0, None)
 
     card_classes = "po-card"
     if po.voided:
         card_classes += " po-card-voided"
 
-    top_badges = []
-    if po.account_type:
-        top_badges.append(f'<span class="po-card-badge">{html.escape(po.account_type)}</span>')
+    type_cell = [_order_type_badge_html(po.order_type)]
     if po.voided:
-        top_badges.append('<span class="po-card-badge po-card-badge-voided">Voided</span>')
+        type_cell.append('<span class="po-badge po-badge-voided">Voided</span>')
 
-    parts = [
-        f'<a class="po-card-link" href="?po_id={po.po_id}" target="_self">',
-        f'<div class="{card_classes}">',
-    ]
-    if top_badges:
-        parts.append(f'<div class="po-card-top">{"".join(top_badges)}</div>')
-    parts.append(f'<div class="po-card-number">{number}</div>')
-    parts.append(f'<div class="po-card-customer">{customer_name}</div>')
-    if po.order_date:
-        parts.append(f'<div class="po-card-date">Ordered {po.order_date.isoformat()}</div>')
-    parts.append("</div></a>")
-    return "".join(parts)
+    row = (
+        f'<div class="po-row-grid">'
+        f'<div>{po.order_date.isoformat() if po.order_date else "—"}</div>'
+        f'<div class="po-row-number">{number}</div>'
+        f'<div>{total_skus}</div>'
+        f'<div>{_format_quantity(total_units)}</div>'
+        f'<div class="po-row-type-cell">{"".join(type_cell)}</div>'
+        f"</div>"
+    )
+
+    return (
+        f'<a class="po-card-link" href="?po_id={po.po_id}" target="_self">'
+        f'<div class="{card_classes}">{row}</div></a>'
+    )
 
 
 def _render_detail(po_id: int) -> None:
@@ -203,8 +257,8 @@ def _render_detail(po_id: int) -> None:
         st.rerun()
 
     st.header(po.po_number)
-    if po.account_type:
-        st.caption(po.account_type)
+    if po.order_type:
+        st.markdown(f'{PO_CARD_CSS}{_order_type_badge_html(po.order_type)}', unsafe_allow_html=True)
     if po.voided:
         st.badge("Voided", color="red")
 

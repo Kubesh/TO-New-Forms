@@ -15,7 +15,7 @@ from src.services.customers import (
     search_customers,
     update_customer,
 )
-from src.services.purchase_orders import list_purchase_orders_for_customer
+from src.services.purchase_orders import get_non_voided_po_counts, list_purchase_orders_for_customer
 
 ADDRESS_FIELDS = (
     "address_line1",
@@ -45,12 +45,25 @@ CARD_CSS = """
     margin-bottom: 0.75rem;
 }
 .customer-card {
+    position: relative;
     border: 1px solid rgba(128, 128, 128, 0.35);
     border-radius: 0.5rem;
     padding: 1rem 1.25rem;
     width: 100%;
     box-sizing: border-box;
     transition: border-color 0.15s ease;
+}
+.customer-card-po-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1.25rem;
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.16);
+    color: #2563eb !important;
 }
 .customer-card-link:hover .customer-card {
     border-color: rgba(128, 128, 128, 0.7);
@@ -125,8 +138,8 @@ def _po_link_html(po) -> str:
     bits = [f'<span class="po-link-number">{number}</span>']
     if po.order_date:
         bits.append(f" — {po.order_date.isoformat()}")
-    if po.account_type:
-        bits.append(f" — {html.escape(po.account_type)}")
+    if po.order_type:
+        bits.append(f" — {html.escape(po.order_type)}")
     if po.voided:
         bits.append('<span class="po-link-voided">Voided</span>')
     return (
@@ -210,9 +223,13 @@ def _render_list() -> None:
                     offset=(page - 1) * PAGE_SIZE,
                 )
                 duplicate_names = get_duplicate_customer_names(session)
+                po_counts = get_non_voided_po_counts(
+                    session, [c.customer_id for c in customers]
+                )
             else:
                 customers = []
                 duplicate_names = set()
+                po_counts = {}
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -222,7 +239,12 @@ def _render_list() -> None:
         return
 
     cards_html = "".join(
-        _card_html(customer, customer.customer_name in duplicate_names) for customer in customers
+        _card_html(
+            customer,
+            customer.customer_name in duplicate_names,
+            po_counts.get(customer.customer_id, 0),
+        )
+        for customer in customers
     )
     st.markdown(
         f'{CARD_CSS}<div class="customer-card-list">{cards_html}</div>',
@@ -253,7 +275,7 @@ def _render_pagination(page: int, total_pages: int, total: int) -> None:
             st.rerun()
 
 
-def _card_html(customer, is_duplicate: bool) -> str:
+def _card_html(customer, is_duplicate: bool, po_count: int = 0) -> str:
     name = html.escape(customer.customer_name)
     type_name = html.escape(customer.customer_type.name) if customer.customer_type else None
     parent_name = html.escape(customer.parent.customer_name) if customer.parent else None
@@ -278,6 +300,9 @@ def _card_html(customer, is_duplicate: bool) -> str:
         f'<a class="customer-card-link" href="?customer_id={customer.customer_id}" target="_self">',
         f'<div class="{card_classes}">',
     ]
+    if po_count:
+        label = "1 PO" if po_count == 1 else f"{po_count} POs"
+        parts.append(f'<div class="customer-card-po-badge">{label}</div>')
     if top_badges:
         parts.append(f'<div class="customer-card-top">{"".join(top_badges)}</div>')
     if parent_name:
