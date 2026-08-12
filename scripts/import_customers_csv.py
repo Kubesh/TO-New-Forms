@@ -17,6 +17,10 @@ Safe to re-run: stores are upserted by store_key, banner parents are
 reused by (customer_name, customer_type_id) if they already exist, and
 contacts are only created if a matching (customer_id, contact_name)
 pair doesn't already exist.
+
+All existing rows are loaded up front and all writes are batched, so
+this runs as a handful of round trips to the database rather than one
+per CSV row.
 """
 import argparse
 import csv
@@ -26,12 +30,24 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import create_engine, select  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
 
-from src.db import session_scope  # noqa: E402
+from src.db import normalize_database_url  # noqa: E402
 from src.models import Customer, CustomerContact, CustomerType  # noqa: E402
 
 PARENT_TYPE_NAME = "Parent Account"
+
+
+def get_session():
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError(
+            "DATABASE_URL is not set. Copy .env.example to .env and add your Neon "
+            "connection string."
+        )
+    engine = create_engine(normalize_database_url(database_url), pool_pre_ping=True)
+    return sessionmaker(bind=engine)()
 
 
 def clean(value: str | None) -> str | None:
@@ -94,7 +110,8 @@ def main() -> None:
             seen_banners.add(banner)
             banner_names.append(banner)
 
-    with session_scope() as session:
+    session = get_session()
+    try:
         parent_type = session.scalar(
             select(CustomerType).where(CustomerType.name == PARENT_TYPE_NAME)
         )
@@ -102,30 +119,48 @@ def main() -> None:
             print(f'No customer_type named "{PARENT_TYPE_NAME}" found - aborting.')
             return
 
-        banner_to_customer_id: dict[str, int] = {}
-        parents_created = 0
-        for banner in banner_names:
-            existing = session.scalar(
+        print("Loading existing records...")
+        existing_parents = {
+            c.customer_name: c
+            for c in session.scalars(
                 select(Customer).where(
-                    Customer.customer_name == banner,
-                    Customer.customer_type_id == parent_type.customer_type_id,
+                    Customer.customer_type_id == parent_type.customer_type_id
                 )
             )
+        }
+        existing_by_store_key = {
+            c.store_key: c
+            for c in session.scalars(select(Customer).where(Customer.store_key.isnot(None)))
+        }
+        existing_contacts = {
+            (customer_id, contact_name)
+            for customer_id, contact_name in session.execute(
+                select(CustomerContact.customer_id, CustomerContact.contact_name)
+            )
+        }
+
+        print("Building banner (parent) records...")
+        banner_to_customer_id: dict[str, int] = {}
+        new_parents: list[tuple[str, Customer]] = []
+        for banner in banner_names:
+            existing = existing_parents.get(banner)
             if existing:
                 banner_to_customer_id[banner] = existing.customer_id
                 continue
-            parent = Customer(
-                customer_name=banner,
-                customer_type_id=parent_type.customer_type_id,
-            )
+            parent = Customer(customer_name=banner, customer_type_id=parent_type.customer_type_id)
             session.add(parent)
+            new_parents.append((banner, parent))
+        if new_parents:
             session.flush()
+        for banner, parent in new_parents:
             banner_to_customer_id[banner] = parent.customer_id
-            parents_created += 1
+        parents_created = len(new_parents)
 
+        print("Building store records...")
         customers_created = 0
         customers_updated = 0
         store_key_to_customer_id: dict[int, int] = {}
+        new_customers: list[tuple[int, Customer]] = []
         for row in rows:
             store_key = int(row["store_key"])
             type_id_raw = clean(row["customer_type_id"])
@@ -142,7 +177,7 @@ def main() -> None:
                 parent_id=banner_to_customer_id.get(banner) if banner else None,
             )
 
-            existing = session.scalar(select(Customer).where(Customer.store_key == store_key))
+            existing = existing_by_store_key.get(store_key)
             if existing:
                 for key, value in fields.items():
                     setattr(existing, key, value)
@@ -151,28 +186,28 @@ def main() -> None:
             else:
                 customer = Customer(store_key=store_key, **fields)
                 session.add(customer)
-                session.flush()
-                store_key_to_customer_id[store_key] = customer.customer_id
+                new_customers.append((store_key, customer))
                 customers_created += 1
+        if new_customers:
+            session.flush()
+        for store_key, customer in new_customers:
+            store_key_to_customer_id[store_key] = customer.customer_id
 
+        print("Building contact records...")
         contacts_created = 0
         for row in rows:
             contact_name = clean(row.get("Contact Name"))
             if not contact_name:
                 continue
             customer_id = store_key_to_customer_id[int(row["store_key"])]
-            existing = session.scalar(
-                select(CustomerContact).where(
-                    CustomerContact.customer_id == customer_id,
-                    CustomerContact.contact_name == contact_name,
-                )
-            )
-            if existing:
+            key = (customer_id, contact_name)
+            if key in existing_contacts:
                 continue
             session.add(CustomerContact(customer_id=customer_id, contact_name=contact_name))
+            existing_contacts.add(key)
             contacts_created += 1
 
-        print(f"Rows in CSV: {len(raw_rows)}")
+        print(f"\nRows in CSV: {len(raw_rows)}")
         print(f"Rows after dropping exact duplicates: {len(rows)}")
         print(f"Banner parents created: {parents_created} (of {len(banner_names)} distinct banners)")
         print(f"Stores created: {customers_created}")
@@ -195,6 +230,8 @@ def main() -> None:
         else:
             session.commit()
             print("\nCommitted.")
+    finally:
+        session.close()
 
 
 if __name__ == "__main__":
