@@ -2,15 +2,35 @@
 
 Internal Streamlit app backed by a Neon Postgres database. No auth yet — local/dev use only.
 
+## Requirements
+
+Python 3.11+ (pinned via `.python-version`). The model layer uses modern
+type-hint syntax (`str | None`) that requires 3.10+.
+
+If you use `pyenv`:
+
+```bash
+pyenv install -s 3.11
+```
+
+On macOS without `pyenv`:
+
+```bash
+brew install python@3.11
+```
+
 ## Setup
 
 ```bash
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # edit .env and set DATABASE_URL to your Neon connection string
 ```
+
+If your existing `.venv` was created with an older Python, delete it and
+recreate: `rm -rf .venv && python3.11 -m venv .venv`.
 
 ## Run migrations
 
