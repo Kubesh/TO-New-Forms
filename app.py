@@ -21,6 +21,9 @@ st.markdown(
         min-width: 244px !important;
     }
     [data-testid="stHeaderActionElements"] { display: none !important; }
+    [data-testid="stMainBlockContainer"] {
+        max-width: 65% !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,

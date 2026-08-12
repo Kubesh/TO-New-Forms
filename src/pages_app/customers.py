@@ -108,7 +108,7 @@ def customers_page() -> None:
 
 
 def _render_list() -> None:
-    col_search, col_add = st.columns([5, 1])
+    col_search, col_add = st.columns([3, 1])
     with col_search:
         query = st.text_input(
             "Search customers",
@@ -186,7 +186,7 @@ def _render_detail(customer_id: int) -> None:
             st.rerun()
         return
 
-    col_back, col_edit = st.columns([5, 1])
+    col_back, col_edit = st.columns([3, 1])
     with col_back:
         if st.button("← Back to list"):
             st.query_params.clear()
