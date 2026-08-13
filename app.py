@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 
 from src.pages_app.customers import customers_page
 from src.pages_app.items import items_page
@@ -32,6 +33,15 @@ st.markdown(
     own font-family instead of inheriting the theme's). */
     html, body, .stApp, [class^="st-"], [class*=" st-"] {
         font-family: "Futura PT", "Source Sans", sans-serif !important;
+    }
+    /* The broad override above also catches Streamlit's icon-font glyphs
+    (the sidebar hamburger/close arrows, etc.), which render via ligature
+    text in a dedicated icon font - forcing our brand font onto them shows
+    literal text like "keyboard_double_arrow_right" instead of the icon.
+    Restore their font explicitly; this rule must come after the override
+    above so it wins the (otherwise tied) !important/specificity fight. */
+    [data-testid="stIconMaterial"] {
+        font-family: "Material Symbols Rounded" !important;
     }
     [data-testid="stSidebar"] {
         border-right: 2px solid #1A1712 !important;
@@ -135,5 +145,40 @@ with st.sidebar:
     st.page_link(customers, label="Customers")
     st.page_link(purchase_orders, label="Purchase Orders")
     st.page_link(items, label="Items")
+
+    # Streamlit's page navigation is a client-side transition, not a full
+    # page reload, so the sidebar's open/closed state survives it - on
+    # mobile that means clicking a nav link leaves the sidebar covering
+    # whichever page you just navigated to. There's no Python-level API for
+    # sidebar collapse state, so this reaches into the parent document from
+    # a components.html iframe (same-origin, so this is allowed) and clicks
+    # the native close button itself after a nav-link click, but only on
+    # narrow/mobile viewports - desktop has no close button to click, and
+    # the width check short-circuits before ever looking for one there.
+    components.html(
+        """
+        <script>
+        (function () {
+            if (window.parent.__tpSidebarAutoClose) return;
+            window.parent.__tpSidebarAutoClose = true;
+            const doc = window.parent.document;
+            doc.addEventListener('click', function (e) {
+                if (window.parent.innerWidth >= 768) return;
+                const link = e.target.closest(
+                    '[data-testid="stSidebar"] [data-testid="stPageLink"] a'
+                );
+                if (!link) return;
+                setTimeout(function () {
+                    const closeBtn = doc.querySelector(
+                        '[data-testid="stSidebarCollapseButton"] button'
+                    );
+                    if (closeBtn) closeBtn.click();
+                }, 100);
+            }, true);
+        })();
+        </script>
+        """,
+        height=0,
+    )
 
 pg.run()
