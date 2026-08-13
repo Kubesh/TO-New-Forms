@@ -53,6 +53,26 @@ st.markdown(
         font-size: 0.85rem;
         letter-spacing: 0.03em;
     }
+    .tp-sidebar-brand {
+        padding-bottom: 1rem;
+        margin-bottom: 0.75rem;
+        border-bottom: 2px solid #1A1712;
+    }
+    .tp-sidebar-brand-name {
+        font-weight: 800;
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.01em;
+        line-height: 1.15;
+    }
+    .tp-sidebar-brand-sub {
+        font-weight: 700;
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #F4591A;
+        margin-top: 0.15rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -73,6 +93,13 @@ pg = st.navigation(
 )
 
 with st.sidebar:
+    st.markdown(
+        '<div class="tp-sidebar-brand">'
+        '<div class="tp-sidebar-brand-name">Treehouse Originals</div>'
+        '<div class="tp-sidebar-brand-sub">Operations</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
     st.page_link(customers, label="Customers")
     st.page_link(purchase_orders, label="Purchase Orders")
     st.page_link(items, label="Items")
