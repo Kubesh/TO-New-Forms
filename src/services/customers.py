@@ -38,6 +38,7 @@ def _apply_customer_filters(
     shipping_state: str | None = None,
     chain_name: str | None = None,
     has_ordered: bool | None = None,
+    show_archived: bool = False,
 ):
     if query:
         stmt = stmt.where(Customer.customer_name.ilike(f"%{query}%"))
@@ -53,6 +54,7 @@ def _apply_customer_filters(
                 select(PurchaseOrder.customer_id).where(PurchaseOrder.customer_id.isnot(None))
             )
         )
+    stmt = stmt.where(Customer.archived.is_(show_archived))
     return stmt
 
 
@@ -63,6 +65,7 @@ def count_customers(
     shipping_state: str | None = None,
     chain_name: str | None = None,
     has_ordered: bool | None = None,
+    show_archived: bool = False,
 ) -> int:
     stmt = _apply_customer_filters(
         select(func.count()).select_from(Customer),
@@ -71,6 +74,7 @@ def count_customers(
         shipping_state,
         chain_name,
         has_ordered,
+        show_archived,
     )
     return session.scalar(stmt) or 0
 
@@ -82,6 +86,7 @@ def search_customers(
     shipping_state: str | None = None,
     chain_name: str | None = None,
     has_ordered: bool | None = None,
+    show_archived: bool = False,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[Customer]:
@@ -90,7 +95,7 @@ def search_customers(
         joinedload(Customer.parent),
     )
     stmt = _apply_customer_filters(
-        stmt, query, customer_type_id, shipping_state, chain_name, has_ordered
+        stmt, query, customer_type_id, shipping_state, chain_name, has_ordered, show_archived
     )
     stmt = stmt.order_by(Customer.customer_name)
     if limit is not None:

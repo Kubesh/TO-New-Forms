@@ -154,7 +154,7 @@ def _render_list() -> None:
         st.error(str(exc))
         return
 
-    col_type, col_state, col_chain, col_ordered = st.columns([1, 1, 1, 1])
+    col_type, col_state, col_chain, col_ordered, col_archived = st.columns([1, 1, 1, 1, 1])
     with col_type:
         type_choice = st.selectbox("Account type", ["All types"] + [t.name for t in type_choices])
     with col_state:
@@ -164,6 +164,9 @@ def _render_list() -> None:
     with col_ordered:
         st.markdown("<div style='height: 1.85rem'></div>", unsafe_allow_html=True)
         ordered_only = st.checkbox("Ordered", help="Only show customers who have ever placed a purchase order.")
+    with col_archived:
+        st.markdown("<div style='height: 1.85rem'></div>", unsafe_allow_html=True)
+        show_archived = st.checkbox("Archived", help="Show archived customers instead of active ones.")
 
     type_id = None
     if type_choice != "All types":
@@ -172,7 +175,7 @@ def _render_list() -> None:
     chain_name = None if chain_choice == "All chains" else chain_choice
     has_ordered = True if ordered_only else None
 
-    filters_key = (query, type_id, shipping_state, chain_name, has_ordered)
+    filters_key = (query, type_id, shipping_state, chain_name, has_ordered, show_archived)
     if st.session_state.get("customer_filters_key") != filters_key:
         st.session_state["customer_filters_key"] = filters_key
         st.session_state["customer_page"] = 1
@@ -180,7 +183,9 @@ def _render_list() -> None:
 
     try:
         with session_scope() as session:
-            total = count_customers(session, query, type_id, shipping_state, chain_name, has_ordered)
+            total = count_customers(
+                session, query, type_id, shipping_state, chain_name, has_ordered, show_archived
+            )
             total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
             page = min(max(page, 1), total_pages)
             st.session_state["customer_page"] = page
@@ -193,6 +198,7 @@ def _render_list() -> None:
                     shipping_state,
                     chain_name,
                     has_ordered,
+                    show_archived,
                     limit=PAGE_SIZE,
                     offset=(page - 1) * PAGE_SIZE,
                 )
@@ -304,7 +310,7 @@ def _render_detail(customer_id: int) -> None:
             st.rerun()
         return
 
-    col_back, col_edit = st.columns([3, 1])
+    col_back, col_edit, col_archive = st.columns([2, 1, 1])
     with col_back:
         if st.button("← Back to list"):
             st.query_params.clear()
@@ -312,9 +318,17 @@ def _render_detail(customer_id: int) -> None:
     with col_edit:
         if st.button("Edit customer", width="stretch"):
             edit_customer_dialog(customer.customer_id)
+    with col_archive:
+        archive_label = "Unarchive customer" if customer.archived else "Archive customer"
+        if st.button(archive_label, width="stretch", key="archive_customer_btn"):
+            with session_scope() as session:
+                update_customer(session, customer.customer_id, archived=not customer.archived)
+            st.rerun()
 
     st.header(customer.customer_name)
     st.caption(customer.customer_type.name if customer.customer_type else "No type")
+    if customer.archived:
+        st.badge("Archived", color="gray")
     if customer.customer_name in duplicate_names:
         st.badge("Duplicate name - another customer shares this name", color="orange")
     if customer.parent:

@@ -48,6 +48,7 @@ class Customer(Base, TimestampMixin):
     store_key: Mapped[int | None] = mapped_column()
     notes: Mapped[str | None] = mapped_column(String(100))
     phone_number: Mapped[str | None] = mapped_column(String(25))
+    archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     billing_address_line1: Mapped[str | None] = mapped_column(String(255))
     billing_address_line2: Mapped[str | None] = mapped_column(String(255))
