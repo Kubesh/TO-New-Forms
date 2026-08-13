@@ -9,6 +9,18 @@ def list_customer_types(session: Session) -> list[CustomerType]:
     return list(session.scalars(stmt).all())
 
 
+DEFAULT_DUE_DATE_DAYS = 14
+DUE_DATE_DAYS_BY_CUSTOMER_TYPE = {"Chain": 7, "Distributor": 21}
+
+
+def resolve_due_date_days(customer: Customer | None) -> int:
+    """Default PO due-date offset in days: 14 for everyone, 7 for chains,
+    21 for distributors, keyed off the customer's customer_type."""
+    if customer is None or customer.customer_type is None:
+        return DEFAULT_DUE_DATE_DAYS
+    return DUE_DATE_DAYS_BY_CUSTOMER_TYPE.get(customer.customer_type.name, DEFAULT_DUE_DATE_DAYS)
+
+
 def get_duplicate_customer_names(session: Session) -> set[str]:
     """Customer names that appear on more than one customer record."""
     stmt = (
@@ -128,6 +140,7 @@ def get_customer(session: Session, customer_id: int) -> Customer | None:
         select(Customer)
         .options(
             joinedload(Customer.customer_type),
+            joinedload(Customer.default_order_type),
             joinedload(Customer.parent),
             joinedload(Customer.children),
             joinedload(Customer.contacts),

@@ -16,6 +16,7 @@ from src.services.customers import (
     update_customer,
 )
 from src.pages_app.purchase_orders import create_po_dialog, render_po_table
+from src.services.order_types import list_order_type_choices
 from src.services.purchase_orders import (
     get_non_voided_po_counts,
     get_po_line_item_stats,
@@ -51,8 +52,8 @@ CARD_CSS = """
 }
 .customer-card {
     position: relative;
-    border: 1px solid rgba(128, 128, 128, 0.35);
-    border-radius: 0.5rem;
+    border: 2px solid #1A1712;
+    border-radius: 0.625rem;
     padding: 1rem 1.25rem;
     width: 100%;
     box-sizing: border-box;
@@ -64,21 +65,23 @@ CARD_CSS = """
     right: 1.25rem;
     display: inline-block;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
     padding: 0.15rem 0.55rem;
     border-radius: 999px;
-    background: rgba(37, 99, 235, 0.16);
-    color: #2563eb !important;
+    background: #F4591A;
+    color: #FFFFFF !important;
 }
 .customer-card-link:hover .customer-card {
-    border-color: rgba(128, 128, 128, 0.7);
+    border-color: #F4591A;
 }
 .customer-card-has-parent {
-    border-color: #2563eb;
+    border-color: #F4591A;
     border-width: 2px;
 }
 .customer-card-link:hover .customer-card-has-parent {
-    border-color: #1d4ed8;
+    border-color: #D94A0E;
 }
 .customer-card-top {
     display: flex;
@@ -346,7 +349,7 @@ def _render_detail(customer_id: int) -> None:
         st.subheader("Purchase Orders")
     with col_po_create:
         if st.button("Create purchase order", width="stretch", key="create_po_btn"):
-            create_po_dialog(customer.customer_id, customer.customer_name)
+            create_po_dialog(customer.customer_id)
     if purchase_orders:
         render_po_table(purchase_orders, po_stats, href_base="/purchase-orders")
     else:
@@ -374,7 +377,9 @@ def _render_address(customer, prefix: str) -> None:
         st.write(values["country"])
 
 
-def _render_customer_form(default: dict, type_choices, parent_choices, key_prefix: str) -> dict:
+def _render_customer_form(
+    default: dict, type_choices, parent_choices, order_type_choices, key_prefix: str
+) -> dict:
     customer_name = st.text_input(
         "Customer name*",
         value=default.get("customer_name", ""),
@@ -392,6 +397,24 @@ def _render_customer_form(default: dict, type_choices, parent_choices, key_prefi
         "Customer type", type_names, index=type_index, key=f"{key_prefix}_customer_type"
     )
     customer_type_id = type_ids[type_names.index(type_choice)]
+
+    order_type_names = ["No override (use customer type default)"] + [
+        name for _, name in order_type_choices
+    ]
+    order_type_ids = [None] + [order_type_id for order_type_id, _ in order_type_choices]
+    try:
+        order_type_index = order_type_ids.index(default.get("default_order_type_id"))
+    except ValueError:
+        order_type_index = 0
+    order_type_choice = st.selectbox(
+        "Default order type",
+        order_type_names,
+        index=order_type_index,
+        key=f"{key_prefix}_default_order_type",
+        help="New POs for this customer start with this order type. Leave unset to fall "
+        "back to Direct, or Distributor for distributor-type customers.",
+    )
+    default_order_type_id = order_type_ids[order_type_names.index(order_type_choice)]
 
     parent_names = ["No parent"] + [name for _, name in parent_choices]
     parent_ids = [None] + [parent_id for parent_id, _ in parent_choices]
@@ -524,6 +547,7 @@ def _render_customer_form(default: dict, type_choices, parent_choices, key_prefi
     return dict(
         customer_name=customer_name.strip(),
         customer_type_id=customer_type_id,
+        default_order_type_id=default_order_type_id,
         parent_id=parent_id,
         phone_number=phone_number.strip() or None,
         notes=notes.strip() or None,
@@ -547,6 +571,7 @@ def edit_customer_dialog(customer_id: int) -> None:
     with session_scope() as session:
         customer = get_customer(session, customer_id)
         type_choices = [(t.customer_type_id, t.name) for t in list_customer_types(session)]
+        order_type_choices = list_order_type_choices(session)
         parent_choices = list_customer_choices(session, exclude_customer_id=customer_id)
 
     if not customer:
@@ -556,6 +581,7 @@ def edit_customer_dialog(customer_id: int) -> None:
     default = dict(
         customer_name=customer.customer_name,
         customer_type_id=customer.customer_type_id,
+        default_order_type_id=customer.default_order_type_id,
         parent_id=customer.parent_id,
         phone_number=customer.phone_number,
         notes=customer.notes,
@@ -572,7 +598,9 @@ def edit_customer_dialog(customer_id: int) -> None:
         shipping_postal_code=customer.shipping_postal_code,
         shipping_country=customer.shipping_country,
     )
-    values = _render_customer_form(default, type_choices, parent_choices, key_prefix="edit")
+    values = _render_customer_form(
+        default, type_choices, parent_choices, order_type_choices, key_prefix="edit"
+    )
     col_save, col_cancel = st.columns(2)
     with col_save:
         if st.button("Save", type="primary", width="stretch", key="edit_save_btn"):
@@ -591,9 +619,12 @@ def edit_customer_dialog(customer_id: int) -> None:
 def add_customer_dialog() -> None:
     with session_scope() as session:
         type_choices = [(t.customer_type_id, t.name) for t in list_customer_types(session)]
+        order_type_choices = list_order_type_choices(session)
         parent_choices = list_customer_choices(session)
 
-    values = _render_customer_form({}, type_choices, parent_choices, key_prefix="add")
+    values = _render_customer_form(
+        {}, type_choices, parent_choices, order_type_choices, key_prefix="add"
+    )
     col_save, col_cancel = st.columns(2)
     with col_save:
         if st.button("Save", type="primary", width="stretch", key="add_save_btn"):

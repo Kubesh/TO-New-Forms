@@ -1,0 +1,17 @@
+[theme]
+base = "light"
+primaryColor = "#F4591A"
+backgroundColor = "#FAF6F1"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1A1712"
+borderColor = "#1A1712"
+font = "Futura, Futura PT, Poppins, sans-serif"
+headingFont = "Futura, Futura PT, Poppins, sans-serif"
+headingFontWeights = 700
+baseRadius = "medium"
+buttonRadius = "medium"
+showWidgetBorder = true
+showSidebarBorder = true
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"

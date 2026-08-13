@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from src.models import PurchaseOrder, PurchaseOrderLineItem
+from src.models import Customer, PurchaseOrder, PurchaseOrderLineItem
 
 
 def _apply_po_filters(stmt, query: str | None = None, customer_id: int | None = None):
@@ -52,7 +52,8 @@ def get_purchase_order(session: Session, po_id: int) -> PurchaseOrder | None:
     stmt = (
         select(PurchaseOrder)
         .options(
-            joinedload(PurchaseOrder.customer),
+            joinedload(PurchaseOrder.customer).joinedload(Customer.customer_type),
+            joinedload(PurchaseOrder.customer).joinedload(Customer.default_order_type),
             joinedload(PurchaseOrder.line_items).joinedload(PurchaseOrderLineItem.item),
         )
         .where(PurchaseOrder.po_id == po_id)
@@ -96,6 +97,20 @@ def create_purchase_order(session: Session, **fields) -> PurchaseOrder:
     session.commit()
     session.refresh(po)
     return po
+
+
+def delete_purchase_order(session: Session, po_id: int) -> bool:
+    """Deletes a PO (and its line items / shipping materials, via cascade).
+    Only allowed once the PO is voided and was never shipped - callers should
+    already be enforcing that in the UI, but it's re-checked here too."""
+    po = session.get(PurchaseOrder, po_id)
+    if po is None:
+        return False
+    if not po.voided or po.ship_date is not None:
+        return False
+    session.delete(po)
+    session.commit()
+    return True
 
 
 def update_purchase_order(session: Session, po_id: int, **fields) -> PurchaseOrder | None:

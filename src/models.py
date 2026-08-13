@@ -26,6 +26,13 @@ class CustomerType(Base, TimestampMixin):
     customers: Mapped[list["Customer"]] = relationship(back_populates="customer_type")
 
 
+class OrderType(Base, TimestampMixin):
+    __tablename__ = "order_types"
+
+    order_type_id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+
+
 class Customer(Base, TimestampMixin):
     __tablename__ = "customers"
 
@@ -33,6 +40,9 @@ class Customer(Base, TimestampMixin):
     customer_name: Mapped[str] = mapped_column(String(255), nullable=False)
     customer_type_id: Mapped[int | None] = mapped_column(
         ForeignKey("customer_types.customer_type_id")
+    )
+    default_order_type_id: Mapped[int | None] = mapped_column(
+        ForeignKey("order_types.order_type_id")
     )
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("customers.customer_id"))
     store_key: Mapped[int | None] = mapped_column()
@@ -54,6 +64,7 @@ class Customer(Base, TimestampMixin):
     shipping_country: Mapped[str | None] = mapped_column(String(120))
 
     customer_type: Mapped["CustomerType | None"] = relationship(back_populates="customers")
+    default_order_type: Mapped["OrderType | None"] = relationship()
     parent: Mapped["Customer | None"] = relationship(
         remote_side="Customer.customer_id", back_populates="children"
     )

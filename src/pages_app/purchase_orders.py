@@ -1,15 +1,18 @@
 import html
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import streamlit as st
 
 from src.db import session_scope
+from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
+from src.services.order_types import list_order_type_names, resolve_default_order_type
 from src.services.purchase_orders import (
     add_line_item,
     count_purchase_orders,
     create_purchase_order,
+    delete_purchase_order,
     get_po_line_item_stats,
     get_purchase_order,
     search_purchase_orders,
@@ -17,8 +20,6 @@ from src.services.purchase_orders import (
     update_purchase_order,
 )
 from src.services.shipping_materials import list_shipping_materials_for_po, replace_shipping_materials
-
-ORDER_TYPE_OPTIONS = ["Direct", "Faire Order", "Distributor"]
 
 PAGE_SIZE = 25
 DEFAULT_NEW_PO_ITEM_ROWS = 5
@@ -46,15 +47,15 @@ PO_CARD_CSS = """
     margin-bottom: 0.6rem;
 }
 .po-card {
-    border: 1px solid rgba(128, 128, 128, 0.35);
-    border-radius: 0.5rem;
+    border: 2px solid #1A1712;
+    border-radius: 0.625rem;
     padding: 0.85rem 1.25rem;
     width: 100%;
     box-sizing: border-box;
     transition: border-color 0.15s ease;
 }
 .po-card-link:hover .po-card {
-    border-color: rgba(128, 128, 128, 0.7);
+    border-color: #F4591A;
 }
 .po-card-voided {
     border-color: #b91c1c;
@@ -65,7 +66,7 @@ PO_CARD_CSS = """
 .po-table-header,
 .po-row-grid {
     display: grid;
-    grid-template-columns: 110px 150px 1fr 100px 100px 140px;
+    grid-template-columns: 95px 100px minmax(120px, 1fr) 75px 75px 120px;
     gap: 0.75rem;
     align-items: center;
 }
@@ -132,6 +133,15 @@ def _format_quantity(value) -> str:
     if value == value.to_integral_value():
         return str(int(value))
     return str(value)
+
+
+def _item_option_label(sku: str, name: str, subcategory: str | None) -> str:
+    # Streamlit's selectbox options are plain text - there's no way to render
+    # just the SKU in a lighter color within a single option the way a
+    # custom-styled dropdown could.
+    if subcategory:
+        return f"{sku} — {subcategory}: {name}"
+    return f"{sku} — {name}"
 
 
 def _clear_dialog_state(prefix: str) -> None:
@@ -286,7 +296,8 @@ def _render_detail(po_id: int) -> None:
             st.rerun()
         return
 
-    col_back, col_edit = st.columns([3, 1])
+    can_delete = po.voided and po.ship_date is None
+    col_back, col_edit, col_delete = st.columns([2, 1, 1])
     with col_back:
         if st.button("← Back to list"):
             st.query_params.clear()
@@ -294,6 +305,16 @@ def _render_detail(po_id: int) -> None:
     with col_edit:
         if st.button("Edit purchase order", width="stretch"):
             edit_po_dialog(po.po_id)
+    with col_delete:
+        if st.button(
+            "Delete purchase order",
+            width="stretch",
+            disabled=not can_delete,
+            key="delete_po_btn",
+        ):
+            delete_po_confirm_dialog(po.po_id, po.po_number)
+    if not can_delete:
+        st.caption("Void this PO (and make sure it hasn't shipped) to enable delete.")
 
     st.header(po.po_number)
     if po.order_type:
@@ -365,12 +386,31 @@ def _render_detail(po_id: int) -> None:
         st.write("No shipping materials recorded.")
 
 
+@st.dialog("Delete purchase order", width="small")
+def delete_po_confirm_dialog(po_id: int, po_number: str) -> None:
+    st.warning(f"Delete PO {po_number}? This can't be undone.")
+    col_confirm, col_cancel = st.columns(2)
+    with col_confirm:
+        if st.button("Delete", type="primary", width="stretch", key=f"po_delete_{po_id}_confirm"):
+            with session_scope() as session:
+                deleted = delete_purchase_order(session, po_id)
+            if deleted:
+                st.query_params.clear()
+                st.rerun()
+            else:
+                st.error("Couldn't delete this PO - make sure it's voided and hasn't shipped.")
+    with col_cancel:
+        if st.button("Cancel", width="stretch", key=f"po_delete_{po_id}_cancel"):
+            st.rerun()
+
+
 def _render_new_item_rows(
     key_prefix: str,
-    item_choices: list[tuple[int, str, str]],
+    item_choices: list[tuple[int, str, str, str | None]],
     excluded_item_ids: set,
     locked: bool = False,
     default_count: int = 0,
+    default_qty: int = 0,
 ) -> list[tuple[int, str, int]]:
     """Dynamic '+ Add item' rows: an item picker + integer qty each.
 
@@ -389,9 +429,16 @@ def _render_new_item_rows(
         count += 1
         st.session_state[count_key] = count
 
-    available = [(item_id, sku, name) for item_id, sku, name in item_choices if item_id not in excluded_item_ids]
-    labels = ["Select an item…"] + [f"{sku} — {name}" for item_id, sku, name in available]
-    by_label = {f"{sku} — {name}": (item_id, sku) for item_id, sku, name in available}
+    available = [
+        (item_id, sku, name, subcategory)
+        for item_id, sku, name, subcategory in item_choices
+        if item_id not in excluded_item_ids
+    ]
+    labels = ["Select an item…"] + [_item_option_label(sku, name, subcategory) for _, sku, name, subcategory in available]
+    by_label = {
+        _item_option_label(sku, name, subcategory): (item_id, sku)
+        for item_id, sku, name, subcategory in available
+    }
 
     picks: dict[int, tuple[str, int]] = {}
     for i in range(count):
@@ -408,7 +455,7 @@ def _render_new_item_rows(
             qty_choice = st.number_input(
                 "Qty",
                 min_value=0,
-                value=0,
+                value=default_qty,
                 step=1,
                 disabled=locked,
                 key=f"{key_prefix}_new_{i}_qty",
@@ -428,6 +475,7 @@ def edit_po_dialog(po_id: int) -> None:
         po = get_purchase_order(session, po_id)
         existing_item_ids = {li.item_id for li in po.line_items if li.item_id} if po else set()
         item_choices = list_sellable_item_choices(session, exclude_item_ids=existing_item_ids)
+        order_type_options = list_order_type_names(session)
 
     if not po:
         st.error("Purchase order not found.")
@@ -450,14 +498,11 @@ def edit_po_dialog(po_id: int) -> None:
 
     locked = not acknowledged
 
-    type_options = ["No type"] + ORDER_TYPE_OPTIONS
-    if po.order_type and po.order_type not in type_options:
-        type_options.append(po.order_type)
-    current_type = po.order_type or "No type"
+    current_type = po.order_type if po.order_type in order_type_options else resolve_default_order_type(po.customer)
     order_type_choice = st.selectbox(
-        "Order type",
-        type_options,
-        index=type_options.index(current_type),
+        "Order type*",
+        order_type_options,
+        index=order_type_options.index(current_type),
         disabled=locked,
         key=f"{state_prefix}type",
     )
@@ -551,7 +596,7 @@ def edit_po_dialog(po_id: int) -> None:
                 update_purchase_order(
                     session,
                     po_id,
-                    order_type=None if order_type_choice == "No type" else order_type_choice,
+                    order_type=order_type_choice,
                     order_date=order_date,
                     due_date=due_date,
                     ship_date=ship_date,
@@ -570,27 +615,43 @@ def edit_po_dialog(po_id: int) -> None:
 
 
 @st.dialog("Create purchase order", width="large")
-def create_po_dialog(customer_id: int, customer_name: str | None = None) -> None:
+def create_po_dialog(customer_id: int) -> None:
     with session_scope() as session:
+        customer = get_customer(session, customer_id)
         item_choices = list_sellable_item_choices(session)
+        order_type_options = list_order_type_names(session)
+
+    if not customer:
+        st.error("Customer not found.")
+        return
 
     state_prefix = "po_create_"
 
-    if customer_name:
-        st.caption(f"For {customer_name}")
+    st.markdown(
+        f'<h4 style="color:#000; margin:0 0 0.5rem 0;">For {html.escape(customer.customer_name)}</h4>',
+        unsafe_allow_html=True,
+    )
 
     po_number = st.text_input("PO number*", key=f"{state_prefix}number")
 
-    type_options = ["No type"] + ORDER_TYPE_OPTIONS
-    order_type_choice = st.selectbox("Order type", type_options, key=f"{state_prefix}type")
+    default_type = resolve_default_order_type(customer)
+    default_type_index = (
+        order_type_options.index(default_type) if default_type in order_type_options else 0
+    )
+    order_type_choice = st.selectbox(
+        "Order type*", order_type_options, index=default_type_index, key=f"{state_prefix}type"
+    )
+
+    default_order_date = date.today()
+    default_due_date = default_order_date + timedelta(days=resolve_due_date_days(customer))
 
     col1, col2, col3 = st.columns(3)
     with col1:
         order_date = st.date_input(
-            "Order date", value=date.today(), key=f"{state_prefix}order_date"
+            "Order date", value=default_order_date, key=f"{state_prefix}order_date"
         )
     with col2:
-        due_date = st.date_input("Due date", value=None, key=f"{state_prefix}due_date")
+        due_date = st.date_input("Due date", value=default_due_date, key=f"{state_prefix}due_date")
     with col3:
         ship_date = st.date_input("Ship date", value=None, key=f"{state_prefix}ship_date")
 
@@ -616,7 +677,7 @@ def create_po_dialog(customer_id: int, customer_name: str | None = None) -> None
                             session,
                             po_number=po_number.strip(),
                             customer_id=customer_id,
-                            order_type=None if order_type_choice == "No type" else order_type_choice,
+                            order_type=order_type_choice,
                             order_date=order_date,
                             due_date=due_date,
                             ship_date=ship_date,
@@ -639,7 +700,7 @@ def create_po_dialog(customer_id: int, customer_name: str | None = None) -> None
             st.rerun()
 
 
-@st.dialog("Manage shipping materials", width="large")
+@st.dialog("Manage shipping materials", width="small")
 def manage_shipping_materials_dialog(po_id: int) -> None:
     with session_scope() as session:
         po = get_purchase_order(session, po_id)
@@ -681,6 +742,7 @@ def manage_shipping_materials_dialog(po_id: int) -> None:
         key_prefix=state_prefix.rstrip("_"),
         item_choices=material_choices,
         excluded_item_ids=existing_item_ids,
+        default_qty=1,
     )
 
     col_save, col_cancel = st.columns(2)
