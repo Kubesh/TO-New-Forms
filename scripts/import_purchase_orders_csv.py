@@ -212,7 +212,7 @@ def import_line_items(session, line_rows: list[dict], po_id_by_number: dict[str,
         po_id = po_id_by_number[po_number]
         for row in po_rows:
             sku = row["SKU"].strip()
-            quantity = parse_decimal(row.get("Quantity")) or Decimal("0")
+            quantity = round(parse_decimal(row.get("Quantity")) or Decimal("0"))
             session.add(
                 PurchaseOrderLineItem(
                     po_id=po_id,

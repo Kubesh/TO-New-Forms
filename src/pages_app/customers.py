@@ -15,7 +15,7 @@ from src.services.customers import (
     search_customers,
     update_customer,
 )
-from src.pages_app.purchase_orders import render_po_table
+from src.pages_app.purchase_orders import create_po_dialog, render_po_table
 from src.services.purchase_orders import (
     get_non_voided_po_counts,
     get_po_line_item_stats,
@@ -341,7 +341,12 @@ def _render_detail(customer_id: int) -> None:
         for child in customer.children:
             st.write(f"- {child.customer_name}")
 
-    st.subheader("Purchase Orders")
+    col_po_header, col_po_create = st.columns([3, 1])
+    with col_po_header:
+        st.subheader("Purchase Orders")
+    with col_po_create:
+        if st.button("Create purchase order", width="stretch", key="create_po_btn"):
+            create_po_dialog(customer.customer_id, customer.customer_name)
     if purchase_orders:
         render_po_table(purchase_orders, po_stats, href_base="/purchase-orders")
     else:

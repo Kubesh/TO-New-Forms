@@ -90,6 +90,14 @@ def get_non_voided_po_counts(session: Session, customer_ids) -> dict[int, int]:
     return {customer_id: count for customer_id, count in session.execute(stmt)}
 
 
+def create_purchase_order(session: Session, **fields) -> PurchaseOrder:
+    po = PurchaseOrder(**fields)
+    session.add(po)
+    session.commit()
+    session.refresh(po)
+    return po
+
+
 def update_purchase_order(session: Session, po_id: int, **fields) -> PurchaseOrder | None:
     po = session.get(PurchaseOrder, po_id)
     if po is None:
@@ -101,7 +109,7 @@ def update_purchase_order(session: Session, po_id: int, **fields) -> PurchaseOrd
     return po
 
 
-def update_line_item_quantities(session: Session, quantities: dict[int, object]) -> None:
+def update_line_item_quantities(session: Session, quantities: dict[int, int]) -> None:
     """line_item_id -> new current quantity. original_quantity is untouched."""
     if not quantities:
         return
@@ -114,7 +122,7 @@ def update_line_item_quantities(session: Session, quantities: dict[int, object])
 
 
 def add_line_item(
-    session: Session, po_id: int, item_id: int, sku: str, quantity: object
+    session: Session, po_id: int, item_id: int, sku: str, quantity: int
 ) -> PurchaseOrderLineItem:
     line_item = PurchaseOrderLineItem(
         po_id=po_id,

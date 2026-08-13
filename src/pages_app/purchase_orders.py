@@ -1,23 +1,27 @@
 import html
+from datetime import date
 from decimal import Decimal
 
 import streamlit as st
 
 from src.db import session_scope
-from src.services.items import list_item_choices
+from src.services.items import list_sellable_item_choices, list_shipping_material_choices
 from src.services.purchase_orders import (
     add_line_item,
     count_purchase_orders,
+    create_purchase_order,
     get_po_line_item_stats,
     get_purchase_order,
     search_purchase_orders,
     update_line_item_quantities,
     update_purchase_order,
 )
+from src.services.shipping_materials import list_shipping_materials_for_po, replace_shipping_materials
 
 ORDER_TYPE_OPTIONS = ["Direct", "Faire Order", "Distributor"]
 
 PAGE_SIZE = 25
+DEFAULT_NEW_PO_ITEM_ROWS = 5
 
 ORDER_TYPE_BADGE_CLASSES = {
     "direct": "po-badge-direct",
@@ -128,6 +132,12 @@ def _format_quantity(value) -> str:
     if value == value.to_integral_value():
         return str(int(value))
     return str(value)
+
+
+def _clear_dialog_state(prefix: str) -> None:
+    for key in list(st.session_state.keys()):
+        if key.startswith(prefix):
+            del st.session_state[key]
 
 
 def purchase_orders_page() -> None:
@@ -267,6 +277,7 @@ def _po_row_html(po, stats, href_base: str) -> str:
 def _render_detail(po_id: int) -> None:
     with session_scope() as session:
         po = get_purchase_order(session, po_id)
+        shipping_materials = list_shipping_materials_for_po(session, po_id) if po else []
 
     if not po:
         st.warning("Purchase order not found.")
@@ -325,31 +336,104 @@ def _render_detail(po_id: int) -> None:
             rows.append(
                 {
                     "SKU": li.sku or (li.item.sku if li.item else ""),
+                    "Subcategory": (li.item.subcategory if li.item else None) or "",
                     "Item": li.item.name if li.item else (li.item_description or ""),
-                    "Original Qty": float(li.original_quantity)
-                    if li.original_quantity is not None
-                    else None,
-                    "Current Qty": float(li.quantity) if li.quantity is not None else None,
-                    "Expanded Weight": float(li.expanded_weight)
-                    if li.expanded_weight is not None
-                    else None,
-                    "Box": li.box or "",
+                    "Current Quantity": li.quantity,
                 }
             )
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.write("No line items on file.")
 
+    col_ship_header, col_ship_btn = st.columns([3, 1])
+    with col_ship_header:
+        st.subheader("Shipping materials")
+    with col_ship_btn:
+        if st.button("Manage shipping materials", width="stretch", key="manage_ship_mat_btn"):
+            manage_shipping_materials_dialog(po.po_id)
+    if shipping_materials:
+        rows = [
+            {
+                "SKU": m.item.sku,
+                "Item": m.item.name,
+                "Quantity": m.quantity,
+            }
+            for m in shipping_materials
+        ]
+        st.dataframe(rows, width="stretch", hide_index=True)
+    else:
+        st.write("No shipping materials recorded.")
+
+
+def _render_new_item_rows(
+    key_prefix: str,
+    item_choices: list[tuple[int, str, str]],
+    excluded_item_ids: set,
+    locked: bool = False,
+    default_count: int = 0,
+) -> list[tuple[int, str, int]]:
+    """Dynamic '+ Add item' rows: an item picker + integer qty each.
+
+    Items already excluded (already on the PO / already recorded) never show
+    up in the picker. If the same item is picked in more than one row here,
+    the quantities are summed into a single entry rather than inserted
+    twice. Returns (item_id, sku, quantity) for rows with a real selection
+    and a quantity greater than zero.
+    """
+    count_key = f"{key_prefix}_new_row_count"
+    if count_key not in st.session_state:
+        st.session_state[count_key] = default_count
+    count = st.session_state[count_key]
+
+    if st.button("+ Add item", disabled=locked, key=f"{key_prefix}_add_item_btn"):
+        count += 1
+        st.session_state[count_key] = count
+
+    available = [(item_id, sku, name) for item_id, sku, name in item_choices if item_id not in excluded_item_ids]
+    labels = ["Select an item…"] + [f"{sku} — {name}" for item_id, sku, name in available]
+    by_label = {f"{sku} — {name}": (item_id, sku) for item_id, sku, name in available}
+
+    picks: dict[int, tuple[str, int]] = {}
+    for i in range(count):
+        row_col1, row_col2 = st.columns([3, 1])
+        with row_col1:
+            sku_choice = st.selectbox(
+                "New item",
+                labels,
+                disabled=locked,
+                key=f"{key_prefix}_new_{i}_sku",
+                label_visibility="collapsed",
+            )
+        with row_col2:
+            qty_choice = st.number_input(
+                "Qty",
+                min_value=0,
+                value=0,
+                step=1,
+                disabled=locked,
+                key=f"{key_prefix}_new_{i}_qty",
+                label_visibility="collapsed",
+            )
+        if sku_choice != "Select an item…" and qty_choice > 0:
+            item_id, sku = by_label[sku_choice]
+            _, existing_qty = picks.get(item_id, (sku, 0))
+            picks[item_id] = (sku, existing_qty + qty_choice)
+
+    return [(item_id, sku, qty) for item_id, (sku, qty) in picks.items()]
+
 
 @st.dialog("Edit purchase order", width="large")
 def edit_po_dialog(po_id: int) -> None:
     with session_scope() as session:
         po = get_purchase_order(session, po_id)
-        item_choices = list_item_choices(session)
+        existing_item_ids = {li.item_id for li in po.line_items if li.item_id} if po else set()
+        item_choices = list_sellable_item_choices(session, exclude_item_ids=existing_item_ids)
 
     if not po:
         st.error("Purchase order not found.")
         return
+
+    state_prefix = f"po_edit_{po_id}_"
 
     has_shipped = po.ship_date is not None
     if has_shipped:
@@ -359,7 +443,7 @@ def edit_po_dialog(po_id: int) -> None:
         )
         acknowledged = st.checkbox(
             "I understand this PO has already shipped and want to edit it anyway",
-            key=f"po_edit_{po_id}_ack",
+            key=f"{state_prefix}ack",
         )
     else:
         acknowledged = True
@@ -375,97 +459,93 @@ def edit_po_dialog(po_id: int) -> None:
         type_options,
         index=type_options.index(current_type),
         disabled=locked,
-        key=f"po_edit_{po_id}_type",
+        key=f"{state_prefix}type",
     )
 
     col1, col2, col3 = st.columns(3)
     with col1:
         order_date = st.date_input(
-            "Order date", value=po.order_date, disabled=locked, key=f"po_edit_{po_id}_order_date"
+            "Order date", value=po.order_date, disabled=locked, key=f"{state_prefix}order_date"
         )
     with col2:
         due_date = st.date_input(
-            "Due date", value=po.due_date, disabled=locked, key=f"po_edit_{po_id}_due_date"
+            "Due date", value=po.due_date, disabled=locked, key=f"{state_prefix}due_date"
         )
     with col3:
         ship_date = st.date_input(
-            "Ship date", value=po.ship_date, disabled=locked, key=f"po_edit_{po_id}_ship_date"
+            "Ship date", value=po.ship_date, disabled=locked, key=f"{state_prefix}ship_date"
         )
 
-    voided = st.checkbox("Voided", value=po.voided, disabled=locked, key=f"po_edit_{po_id}_voided")
-    note = st.text_area("Note", value=po.note or "", disabled=locked, key=f"po_edit_{po_id}_note")
+    voided = st.checkbox("Voided", value=po.voided, disabled=locked, key=f"{state_prefix}voided")
+    note = st.text_area("Note", value=po.note or "", disabled=locked, key=f"{state_prefix}note")
 
     st.markdown("**Line items**")
     st.caption(
-        "Quantity can be edited down to zero but items can't be removed. "
-        "Original quantity is kept for reference."
+        "New quantity can be edited down to zero but items can't be removed. "
+        "Original quantity is kept for reference. Rows with an adjusted quantity are "
+        "highlighted."
     )
 
-    quantity_updates: dict[int, Decimal] = {}
+    quantity_updates: dict[int, int] = {}
+    highlighted_row_keys: list[str] = []
     if po.line_items:
-        col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
-        with col_h2:
-            st.caption("Original qty")
-        with col_h3:
-            st.caption("Current qty")
+        header_cols = st.columns([1.1, 1.3, 2.1, 1, 1])
+        for col, label in zip(header_cols, ["SKU", "Subcategory", "Item", "Original qty", "New qty"]):
+            with col:
+                st.caption(label)
         for li in po.line_items:
-            row_col1, row_col2, row_col3 = st.columns([3, 1, 1])
-            with row_col1:
-                label = li.item.name if li.item else (li.item_description or "Unknown item")
+            qty_key = f"{state_prefix}li_{li.line_item_id}"
+            row_key = f"{state_prefix}li_row_{li.line_item_id}"
+            current_value = st.session_state.get(qty_key, li.quantity)
+            if current_value != li.original_quantity:
+                highlighted_row_keys.append(row_key)
+
+            with st.container(key=row_key):
+                row_cols = st.columns([1.1, 1.3, 2.1, 1, 1])
                 sku_label = li.sku or (li.item.sku if li.item else "")
-                st.write(f"{label} ({sku_label})" if sku_label else label)
-            with row_col2:
-                st.write(_format_quantity(li.original_quantity))
-            with row_col3:
-                new_qty = st.number_input(
-                    "Current qty",
-                    min_value=0.0,
-                    value=float(li.quantity),
-                    step=1.0,
-                    disabled=locked,
-                    key=f"po_edit_{po_id}_li_{li.line_item_id}",
-                    label_visibility="collapsed",
-                )
-            quantity_updates[li.line_item_id] = Decimal(str(new_qty))
+                subcategory = (li.item.subcategory if li.item else None) or "—"
+                item_name = li.item.name if li.item else (li.item_description or "Unknown item")
+                with row_cols[0]:
+                    st.write(sku_label)
+                with row_cols[1]:
+                    st.write(subcategory)
+                with row_cols[2]:
+                    st.write(item_name)
+                with row_cols[3]:
+                    st.write(str(li.original_quantity))
+                with row_cols[4]:
+                    new_qty = st.number_input(
+                        "New qty",
+                        min_value=0,
+                        value=int(li.quantity),
+                        step=1,
+                        disabled=locked,
+                        key=qty_key,
+                        label_visibility="collapsed",
+                    )
+            quantity_updates[li.line_item_id] = new_qty
     else:
         st.write("No line items yet.")
 
-    new_row_count_key = f"po_edit_{po_id}_new_row_count"
-    new_row_count = st.session_state.get(new_row_count_key, 0)
+    if highlighted_row_keys:
+        css_rules = "\n".join(
+            f'.st-key-{key} {{ background-color: rgba(250, 204, 21, 0.25); '
+            "border-radius: 0.5rem; padding: 0.25rem 0.5rem; }}"
+            for key in highlighted_row_keys
+        )
+        st.markdown(f"<style>{css_rules}</style>", unsafe_allow_html=True)
 
-    if st.button("+ Add item", disabled=locked, key=f"po_edit_{po_id}_add_item"):
-        new_row_count += 1
-        st.session_state[new_row_count_key] = new_row_count
-
-    item_labels = ["Select an item…"] + [f"{sku} — {name}" for _, sku, name in item_choices]
-    item_by_label = {f"{sku} — {name}": (item_id, sku) for item_id, sku, name in item_choices}
-    new_rows = []
-    for i in range(new_row_count):
-        row_col1, row_col2 = st.columns([3, 1])
-        with row_col1:
-            sku_choice = st.selectbox(
-                "New item",
-                item_labels,
-                disabled=locked,
-                key=f"po_edit_{po_id}_new_{i}_sku",
-                label_visibility="collapsed",
-            )
-        with row_col2:
-            qty_choice = st.number_input(
-                "Qty",
-                min_value=0.0,
-                value=0.0,
-                step=1.0,
-                disabled=locked,
-                key=f"po_edit_{po_id}_new_{i}_qty",
-                label_visibility="collapsed",
-            )
-        new_rows.append((sku_choice, qty_choice))
+    new_rows = _render_new_item_rows(
+        key_prefix=state_prefix.rstrip("_"),
+        item_choices=item_choices,
+        excluded_item_ids=existing_item_ids,
+        locked=locked,
+    )
 
     col_save, col_cancel = st.columns(2)
     with col_save:
         if st.button(
-            "Save", type="primary", disabled=locked, width="stretch", key=f"po_edit_{po_id}_save"
+            "Save", type="primary", disabled=locked, width="stretch", key=f"{state_prefix}save"
         ):
             with session_scope() as session:
                 update_purchase_order(
@@ -479,14 +559,141 @@ def edit_po_dialog(po_id: int) -> None:
                     note=note.strip() or None,
                 )
                 update_line_item_quantities(session, quantity_updates)
-                for sku_choice, qty_choice in new_rows:
-                    if sku_choice == "Select an item…" or qty_choice <= 0:
-                        continue
-                    item_id, sku = item_by_label[sku_choice]
-                    add_line_item(session, po_id, item_id, sku, Decimal(str(qty_choice)))
-            st.session_state.pop(new_row_count_key, None)
+                for item_id, sku, qty in new_rows:
+                    add_line_item(session, po_id, item_id, sku, qty)
+            _clear_dialog_state(state_prefix)
             st.rerun()
     with col_cancel:
-        if st.button("Cancel", width="stretch", key=f"po_edit_{po_id}_cancel"):
-            st.session_state.pop(new_row_count_key, None)
+        if st.button("Cancel", width="stretch", key=f"{state_prefix}cancel"):
+            _clear_dialog_state(state_prefix)
+            st.rerun()
+
+
+@st.dialog("Create purchase order", width="large")
+def create_po_dialog(customer_id: int, customer_name: str | None = None) -> None:
+    with session_scope() as session:
+        item_choices = list_sellable_item_choices(session)
+
+    state_prefix = "po_create_"
+
+    if customer_name:
+        st.caption(f"For {customer_name}")
+
+    po_number = st.text_input("PO number*", key=f"{state_prefix}number")
+
+    type_options = ["No type"] + ORDER_TYPE_OPTIONS
+    order_type_choice = st.selectbox("Order type", type_options, key=f"{state_prefix}type")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        order_date = st.date_input(
+            "Order date", value=date.today(), key=f"{state_prefix}order_date"
+        )
+    with col2:
+        due_date = st.date_input("Due date", value=None, key=f"{state_prefix}due_date")
+    with col3:
+        ship_date = st.date_input("Ship date", value=None, key=f"{state_prefix}ship_date")
+
+    note = st.text_area("Note", value="", key=f"{state_prefix}note")
+
+    st.markdown("**Line items**")
+    new_rows = _render_new_item_rows(
+        key_prefix=state_prefix.rstrip("_"),
+        item_choices=item_choices,
+        excluded_item_ids=set(),
+        default_count=DEFAULT_NEW_PO_ITEM_ROWS,
+    )
+
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+        if st.button("Save", type="primary", width="stretch", key=f"{state_prefix}save"):
+            if not po_number.strip():
+                st.error("PO number is required.")
+            else:
+                try:
+                    with session_scope() as session:
+                        po = create_purchase_order(
+                            session,
+                            po_number=po_number.strip(),
+                            customer_id=customer_id,
+                            order_type=None if order_type_choice == "No type" else order_type_choice,
+                            order_date=order_date,
+                            due_date=due_date,
+                            ship_date=ship_date,
+                            note=note.strip() or None,
+                            voided=False,
+                        )
+                        for item_id, sku, qty in new_rows:
+                            add_line_item(session, po.po_id, item_id, sku, qty)
+                except Exception:
+                    st.error(
+                        f"Couldn't create the PO - a purchase order numbered "
+                        f"\"{po_number.strip()}\" may already exist."
+                    )
+                else:
+                    _clear_dialog_state(state_prefix)
+                    st.rerun()
+    with col_cancel:
+        if st.button("Cancel", width="stretch", key=f"{state_prefix}cancel"):
+            _clear_dialog_state(state_prefix)
+            st.rerun()
+
+
+@st.dialog("Manage shipping materials", width="large")
+def manage_shipping_materials_dialog(po_id: int) -> None:
+    with session_scope() as session:
+        po = get_purchase_order(session, po_id)
+        materials = list_shipping_materials_for_po(session, po_id)
+        existing_item_ids = {m.item_id for m in materials}
+        material_choices = list_shipping_material_choices(session)
+
+    if not po:
+        st.error("Purchase order not found.")
+        return
+
+    state_prefix = f"po_ship_mat_{po_id}_"
+
+    st.caption("Shipping materials can be added or adjusted at any time.")
+
+    quantity_updates: dict[int, int] = {}
+    if materials:
+        header_cols = st.columns([3, 1])
+        with header_cols[1]:
+            st.caption("Quantity")
+        for m in materials:
+            row_col1, row_col2 = st.columns([3, 1])
+            with row_col1:
+                st.write(f"{m.item.name} ({m.item.sku})")
+            with row_col2:
+                qty = st.number_input(
+                    "Quantity",
+                    min_value=0,
+                    value=int(m.quantity),
+                    step=1,
+                    key=f"{state_prefix}{m.order_shipping_material_id}",
+                    label_visibility="collapsed",
+                )
+            quantity_updates[m.item_id] = qty
+    else:
+        st.write("No shipping materials yet.")
+
+    new_rows = _render_new_item_rows(
+        key_prefix=state_prefix.rstrip("_"),
+        item_choices=material_choices,
+        excluded_item_ids=existing_item_ids,
+    )
+
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+        if st.button("Save", type="primary", width="stretch", key=f"{state_prefix}save"):
+            material_entries: dict[int, int] = dict(quantity_updates)
+            for item_id, sku, qty in new_rows:
+                material_entries[item_id] = material_entries.get(item_id, 0) + qty
+            with session_scope() as session:
+                replace_shipping_materials(session, po_id, list(material_entries.items()))
+            _clear_dialog_state(state_prefix)
+            st.rerun()
+    with col_cancel:
+        if st.button("Cancel", width="stretch", key=f"{state_prefix}cancel"):
+            _clear_dialog_state(state_prefix)
             st.rerun()
