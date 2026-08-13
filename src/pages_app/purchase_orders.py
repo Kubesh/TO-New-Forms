@@ -124,6 +124,13 @@ def _order_type_badge_html(order_type: str | None) -> str:
     return f'<span class="po-badge {css_class}">{html.escape(order_type)}</span>'
 
 
+def _format_date(value) -> str:
+    return value.strftime("%m/%d/%y") if value else "—"
+
+
+DATE_INPUT_FORMAT = "MM/DD/YYYY"  # Streamlit's date_input only supports 4-digit years
+
+
 def _format_quantity(value) -> str:
     if value is None:
         return "0"
@@ -269,7 +276,7 @@ def _po_row_html(po, stats, href_base: str) -> str:
 
     row = (
         '<div class="po-row-grid">'
-        f'<div>{po.order_date.isoformat() if po.order_date else "—"}</div>'
+        f"<div>{_format_date(po.order_date)}</div>"
         f'<div class="po-row-number">{number}</div>'
         f"<div>{customer_name}</div>"
         f"<div>{total_skus}</div>"
@@ -338,11 +345,11 @@ def _render_detail(po_id: int) -> None:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.write(f"**Order date:** {po.order_date.isoformat() if po.order_date else 'N/A'}")
+        st.write(f"**Order date:** {_format_date(po.order_date)}")
     with col2:
-        st.write(f"**Due date:** {po.due_date.isoformat() if po.due_date else 'N/A'}")
+        st.write(f"**Due date:** {_format_date(po.due_date)}")
     with col3:
-        st.write(f"**Ship date:** {po.ship_date.isoformat() if po.ship_date else 'N/A'}")
+        st.write(f"**Ship date:** {_format_date(po.ship_date)}")
 
     if po.note:
         st.write(f"**Note:** {po.note}")
@@ -483,7 +490,7 @@ def edit_po_dialog(po_id: int) -> None:
     has_shipped = po.ship_date is not None
     if has_shipped:
         st.warning(
-            f"This PO shipped on {po.ship_date.isoformat()}. Editing a shipped order won't "
+            f"This PO shipped on {_format_date(po.ship_date)}. Editing a shipped order won't "
             "change what was actually sent - make sure that's really what you want."
         )
         acknowledged = st.checkbox(
@@ -507,15 +514,27 @@ def edit_po_dialog(po_id: int) -> None:
     col1, col2, col3 = st.columns(3)
     with col1:
         order_date = st.date_input(
-            "Order date", value=po.order_date, disabled=locked, key=f"{state_prefix}order_date"
+            "Order date",
+            value=po.order_date,
+            disabled=locked,
+            format=DATE_INPUT_FORMAT,
+            key=f"{state_prefix}order_date",
         )
     with col2:
         due_date = st.date_input(
-            "Due date", value=po.due_date, disabled=locked, key=f"{state_prefix}due_date"
+            "Due date",
+            value=po.due_date,
+            disabled=locked,
+            format=DATE_INPUT_FORMAT,
+            key=f"{state_prefix}due_date",
         )
     with col3:
         ship_date = st.date_input(
-            "Ship date", value=po.ship_date, disabled=locked, key=f"{state_prefix}ship_date"
+            "Ship date",
+            value=po.ship_date,
+            disabled=locked,
+            format=DATE_INPUT_FORMAT,
+            key=f"{state_prefix}ship_date",
         )
 
     voided = st.checkbox("Voided", value=po.voided, disabled=locked, key=f"{state_prefix}voided")
@@ -645,12 +664,22 @@ def create_po_dialog(customer_id: int) -> None:
     col1, col2, col3 = st.columns(3)
     with col1:
         order_date = st.date_input(
-            "Order date", value=default_order_date, key=f"{state_prefix}order_date"
+            "Order date",
+            value=default_order_date,
+            format=DATE_INPUT_FORMAT,
+            key=f"{state_prefix}order_date",
         )
     with col2:
-        due_date = st.date_input("Due date", value=default_due_date, key=f"{state_prefix}due_date")
+        due_date = st.date_input(
+            "Due date",
+            value=default_due_date,
+            format=DATE_INPUT_FORMAT,
+            key=f"{state_prefix}due_date",
+        )
     with col3:
-        ship_date = st.date_input("Ship date", value=None, key=f"{state_prefix}ship_date")
+        ship_date = st.date_input(
+            "Ship date", value=None, format=DATE_INPUT_FORMAT, key=f"{state_prefix}ship_date"
+        )
 
     note = st.text_area("Note", value="", key=f"{state_prefix}note")
 
