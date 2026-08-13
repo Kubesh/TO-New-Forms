@@ -38,10 +38,24 @@ st.markdown(
     (the sidebar hamburger/close arrows, etc.), which render via ligature
     text in a dedicated icon font - forcing our brand font onto them shows
     literal text like "keyboard_double_arrow_right" instead of the icon.
-    Restore their font explicitly; this rule must come after the override
-    above so it wins the (otherwise tied) !important/specificity fight. */
-    [data-testid="stIconMaterial"] {
-        font-family: "Material Symbols Rounded" !important;
+    Rather than depend on that icon font loading/rendering correctly at
+    all, hide its ligature text and draw explicit hamburger/X characters
+    instead - simple, unambiguous, and immune to font-loading issues. */
+    [data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"],
+    [data-testid="stSidebarCollapseButton"] [data-testid="stIconMaterial"] {
+        font-size: 0 !important;
+    }
+    [data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"]::before {
+        content: "\\2630";
+        font-size: 1.35rem;
+        font-family: initial !important;
+        line-height: 1;
+    }
+    [data-testid="stSidebarCollapseButton"] [data-testid="stIconMaterial"]::before {
+        content: "\\2715";
+        font-size: 1.15rem;
+        font-family: initial !important;
+        line-height: 1;
     }
     [data-testid="stSidebar"] {
         border-right: 2px solid #1A1712 !important;

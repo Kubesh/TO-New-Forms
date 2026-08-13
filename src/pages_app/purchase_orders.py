@@ -88,6 +88,39 @@ PO_CARD_CSS = """
     align-items: center;
     flex-wrap: wrap;
 }
+@media (max-width: 767px) {
+    /* The 6-column grid has no room on a phone screen - stack each PO's
+    fields into labeled rows instead (label pulled from data-label via a
+    ::before, since the HTML markup is shared with desktop and doesn't
+    change). The table header is meaningless once labels are inline. */
+    .po-table-header {
+        display: none;
+    }
+    .po-row-grid {
+        display: block;
+    }
+    .po-row-grid > div {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.35rem 0;
+        border-bottom: 1px solid rgba(26, 23, 18, 0.12);
+        text-align: right;
+    }
+    .po-row-grid > div:last-child {
+        border-bottom: none;
+    }
+    .po-row-grid > div::before {
+        content: attr(data-label);
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        opacity: 0.55;
+        text-align: left;
+    }
+}
 .po-badge {
     display: inline-block;
     font-size: 0.75rem;
@@ -276,12 +309,12 @@ def _po_row_html(po, stats, href_base: str) -> str:
 
     row = (
         '<div class="po-row-grid">'
-        f"<div>{_format_date(po.order_date)}</div>"
-        f'<div class="po-row-number">{number}</div>'
-        f"<div>{customer_name}</div>"
-        f"<div>{total_skus}</div>"
-        f"<div>{_format_quantity(total_units)}</div>"
-        f'<div class="po-row-type-cell">{"".join(type_cell)}</div>'
+        f'<div data-label="PO Date">{_format_date(po.order_date)}</div>'
+        f'<div class="po-row-number" data-label="PO Number">{number}</div>'
+        f'<div data-label="Customer">{customer_name}</div>'
+        f'<div data-label="Total SKUs">{total_skus}</div>'
+        f'<div data-label="Total Units">{_format_quantity(total_units)}</div>'
+        f'<div class="po-row-type-cell" data-label="Order Type">{"".join(type_cell)}</div>'
         "</div>"
     )
 
