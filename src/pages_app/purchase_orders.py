@@ -66,8 +66,8 @@ PO_CARD_CSS = """
 .po-table-header,
 .po-row-grid {
     display: grid;
-    grid-template-columns: 95px 100px minmax(120px, 1fr) 75px 75px 120px;
-    gap: 0.75rem;
+    grid-template-columns: 95px minmax(100px, max-content) minmax(120px, 1fr) 75px 75px 120px;
+    gap: 0.5rem;
     align-items: center;
 }
 .po-table-header {
@@ -81,6 +81,7 @@ PO_CARD_CSS = """
 }
 .po-row-number {
     font-weight: 700;
+    white-space: nowrap;
 }
 .po-row-type-cell {
     display: flex;

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -7,6 +9,7 @@ from src.pages_app.purchase_orders import purchase_orders_page
 
 st.set_page_config(
     page_title="Treehouse Originals",
+    page_icon=str(Path(__file__).parent / "static" / "images" / "treehouse-logo.png"),
     layout="wide",
     # "locked" keeps the sidebar permanently open with no collapse control on
     # desktop (the old always-open behavior), but degrades gracefully on
