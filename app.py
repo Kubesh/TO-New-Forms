@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from src.pages_app.customers import customers_page
 from src.pages_app.items import items_page
@@ -168,11 +167,12 @@ with st.sidebar:
     # mobile that means clicking a nav link leaves the sidebar covering
     # whichever page you just navigated to. There's no Python-level API for
     # sidebar collapse state, so this reaches into the parent document from
-    # a components.html iframe (same-origin, so this is allowed) and clicks
-    # the native close button itself after a nav-link click, but only on
-    # narrow/mobile viewports - desktop has no close button to click, and
-    # the width check short-circuits before ever looking for one there.
-    components.html(
+    # a same-origin iframe (allowed - see st.iframe's warning about this)
+    # and clicks the native close button itself after a nav-link click, but
+    # only on narrow/mobile viewports - desktop has no close button to
+    # click, and the width check short-circuits before ever looking for one
+    # there.
+    st.iframe(
         """
         <script>
         (function () {
@@ -195,7 +195,7 @@ with st.sidebar:
         })();
         </script>
         """,
-        height=0,
+        height=1,
     )
 
 pg.run()
