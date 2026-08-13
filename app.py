@@ -69,6 +69,14 @@ st.markdown(
         [data-testid="stMainBlockContainer"] {
             max-width: 65% !important;
         }
+        /* The PO create/edit forms use st.dialog(width="large"), which
+        Streamlit renders at a fixed 1120px - max-width (rather than width)
+        only kicks in when that's wider than our target, so the smaller
+        "small"-width dialogs (delete confirm, manage shipping materials)
+        are left alone. 1120 * 0.75 = 840. */
+        [data-testid="stDialog"] > div {
+            max-width: 840px !important;
+        }
     }
     @media (max-width: 767px) {
         /* Only the expanded state is widened to fill the screen - the
@@ -84,6 +92,14 @@ st.markdown(
         }
     }
     [data-testid="stHeaderActionElements"] { display: none !important; }
+    /* The auto-close/favicon helper below runs in a 1px-tall iframe so it's
+    invisible, but on iOS Safari a scrollable iframe (even a hidden one)
+    can show its native scroll-indicator pill floating in the sidebar -
+    overflow:hidden here stops that at the source. */
+    [data-testid="stIFrame"] {
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }
     h1, h2, h3 {
         text-transform: uppercase;
         letter-spacing: 0.01em;
@@ -172,13 +188,31 @@ with st.sidebar:
     # only on narrow/mobile viewports - desktop has no close button to
     # click, and the width check short-circuits before ever looking for one
     # there.
+    #
+    # It also fixes the favicon: st.set_page_config(page_icon=...) only
+    # works for a local file when Streamlit's MediaFileManager is available
+    # to register it, which isn't reliably the case at page-config time, so
+    # it silently falls back to Streamlit's own icon instead of raising.
+    # Setting the <link rel="icon"> directly here is a guaranteed override.
     st.iframe(
         """
+        <style>
+        html, body { margin: 0; padding: 0; overflow: hidden; }
+        </style>
         <script>
         (function () {
+            const doc = window.parent.document;
+            let iconLink = doc.querySelector('link[rel~="icon"]');
+            if (!iconLink) {
+                iconLink = doc.createElement('link');
+                iconLink.rel = 'icon';
+                doc.head.appendChild(iconLink);
+            }
+            iconLink.type = 'image/png';
+            iconLink.href = '/app/static/images/treehouse-logo.png';
+
             if (window.parent.__tpSidebarAutoClose) return;
             window.parent.__tpSidebarAutoClose = true;
-            const doc = window.parent.document;
             doc.addEventListener('click', function (e) {
                 if (window.parent.innerWidth >= 768) return;
                 const link = e.target.closest(

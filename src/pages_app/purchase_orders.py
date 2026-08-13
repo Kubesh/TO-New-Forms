@@ -66,7 +66,13 @@ PO_CARD_CSS = """
 .po-table-header,
 .po-row-grid {
     display: grid;
-    grid-template-columns: 95px minmax(100px, max-content) minmax(120px, 1fr) 75px 75px 120px;
+    /* Fixed widths (rather than sizing the PO Number column to its content)
+    matter here because each row is its own independent grid - if the
+    column sized to content, a row with a longer PO number would end up
+    with a wider column than its neighbors, throwing off alignment between
+    rows and against the header. 145px comfortably fits the longest PO
+    numbers we see without wrapping (paired with nowrap below). */
+    grid-template-columns: 95px 145px minmax(120px, 1fr) 75px 75px 120px;
     gap: 0.5rem;
     align-items: center;
 }
