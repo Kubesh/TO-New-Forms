@@ -1,3 +1,6 @@
+[server]
+enableStaticServing = true
+
 [theme]
 base = "light"
 primaryColor = "#F4591A"
@@ -5,8 +8,8 @@ backgroundColor = "#FAF6F1"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#1A1712"
 borderColor = "#1A1712"
-font = "Futura, Futura PT, Poppins, sans-serif"
-headingFont = "Futura, Futura PT, Poppins, sans-serif"
+font = "Futura PT, sans-serif"
+headingFont = "Futura PT, sans-serif"
 headingFontWeights = 700
 baseFontSize = 14
 headingFontSizes = ["1.875rem", "1.5rem", "1.25rem"]
@@ -17,3 +20,48 @@ showSidebarBorder = true
 
 [theme.sidebar]
 backgroundColor = "#FFFFFF"
+
+# Real Futura PT, licensed and supplied by Treehouse Originals - see
+# static/fonts/. Each weight is its own static file (not a variable font),
+# so each gets its own [[theme.fontFaces]] entry at its exact weight.
+[[theme.fontFaces]]
+family = "Futura PT"
+url = "app/static/fonts/futura-pt-light.woff2"
+weight = "300"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Futura PT"
+url = "app/static/fonts/futura-pt-book.woff2"
+weight = "400"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Futura PT"
+url = "app/static/fonts/futura-pt-medium.woff2"
+weight = "450"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Futura PT"
+url = "app/static/fonts/futura-pt-demi.woff2"
+weight = "500"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Futura PT"
+url = "app/static/fonts/futura-pt-heavy.woff2"
+weight = "600"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Futura PT"
+url = "app/static/fonts/futura-pt-bold.woff2"
+weight = "700"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Futura PT"
+url = "app/static/fonts/futura-pt-extrabold.woff2"
+weight = "800"
+style = "normal"

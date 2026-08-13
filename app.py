@@ -18,17 +18,14 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Futura is the real Treehouse Originals brand font, so it's first in
-    the stack for users who have it (most Macs ship it as a system font).
-    Everyone else falls through to Source Sans, Streamlit's own bundled
-    font - not Poppins. Streamlit's markdown sanitizer strips <link> tags,
-    and a CSS @import doesn't get processed when injected into a <style>
-    tag this way (a browser quirk: @import is only honored on a style
-    element's first parse, not on a later content update, which is how
-    React/Streamlit sets this markdown block's HTML), so there's no way to
-    pull in a Google-hosted Poppins fallback from here. */
+    /* Futura PT is the real Treehouse Originals brand font, licensed and
+    supplied by Treehouse - the actual font files live in static/fonts/ and
+    load via [[theme.fontFaces]] in .streamlit/config.toml (which also sets
+    this as the theme's font/headingFont; this override exists because a
+    handful of Streamlit's own emotion-styled subcomponents hardcode their
+    own font-family instead of inheriting the theme's). */
     html, body, .stApp, [class^="st-"], [class*=" st-"] {
-        font-family: Futura, "Futura PT", "Source Sans", sans-serif !important;
+        font-family: "Futura PT", "Source Sans", sans-serif !important;
     }
     [data-testid="stSidebarCollapseButton"] { display: none !important; }
     [data-testid="collapsedControl"] { display: none !important; }
@@ -57,6 +54,16 @@ st.markdown(
         padding-bottom: 1rem;
         margin-bottom: 0.75rem;
         border-bottom: 2px solid #1A1712;
+    }
+    .tp-sidebar-brand-row {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .tp-sidebar-brand-logo {
+        width: 34px;
+        height: 34px;
+        flex: none;
     }
     .tp-sidebar-brand-name {
         font-weight: 800;
@@ -95,8 +102,14 @@ pg = st.navigation(
 with st.sidebar:
     st.markdown(
         '<div class="tp-sidebar-brand">'
+        '<div class="tp-sidebar-brand-row">'
+        '<img class="tp-sidebar-brand-logo" src="app/static/images/treehouse-logo.png" '
+        'alt="Treehouse Originals">'
+        "<div>"
         '<div class="tp-sidebar-brand-name">Treehouse Originals</div>'
         '<div class="tp-sidebar-brand-sub">Operations</div>'
+        "</div>"
+        "</div>"
         "</div>",
         unsafe_allow_html=True,
     )
