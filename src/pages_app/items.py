@@ -29,15 +29,13 @@ ITEM_CARD_CSS = """
 <style>
 .item-card-list {
     padding-top: 0.75rem;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 0.75rem;
 }
 .item-card {
     border: 2px solid #1A1712;
     border-left: 6px solid var(--item-cat-color, #1A1712);
     border-radius: 0.625rem;
     padding: 0.85rem 1rem;
+    margin-bottom: 0.75rem;
     box-sizing: border-box;
 }
 .item-card-sku {
@@ -109,28 +107,34 @@ def items_page() -> None:
     with col_category:
         category_choice = st.selectbox("Category", ["All categories"] + categories)
     with col_sellable:
-        sellable_choice = st.selectbox("Sellable", ["All items", "Sellable only", "Not sellable"])
+        st.markdown("<div style='height: 1.85rem'></div>", unsafe_allow_html=True)
+        sellable_only = st.checkbox("Sellable only")
 
     category = None if category_choice == "All categories" else category_choice
+    sellable = True if sellable_only else None
 
-    try:
-        with session_scope() as session:
-            subcategories = list_distinct_subcategories(session, category=category)
-    except RuntimeError as exc:
-        st.error(str(exc))
-        return
+    # Subcategory only makes sense once a category is picked - without one,
+    # subcategory names from unrelated categories would be mixed together.
+    subcategory = None
+    if category:
+        try:
+            with session_scope() as session:
+                subcategories = list_distinct_subcategories(session, category=category)
+        except RuntimeError as exc:
+            st.error(str(exc))
+            return
 
-    # Keying the subcategory picker on the current category means changing
-    # category always starts it fresh at "All subcategories" instead of
-    # carrying over a value that may not exist in the new category's list
-    # (which would otherwise crash - Streamlit rejects a selectbox whose
-    # session-state value isn't in its current options).
-    subcategory_choice = st.selectbox(
-        "Subcategory", ["All subcategories"] + subcategories, key=f"items_subcategory_{category_choice}"
-    )
-    subcategory = None if subcategory_choice == "All subcategories" else subcategory_choice
-
-    sellable = {"Sellable only": True, "Not sellable": False}.get(sellable_choice)
+        # Keying the subcategory picker on the current category means picking
+        # a new category always starts it fresh at "All subcategories" instead
+        # of carrying over a value that may not exist in the new category's
+        # list (which would otherwise crash - Streamlit rejects a selectbox
+        # whose session-state value isn't in its current options).
+        subcategory_choice = st.selectbox(
+            "Subcategory",
+            ["All subcategories"] + subcategories,
+            key=f"items_subcategory_{category_choice}",
+        )
+        subcategory = None if subcategory_choice == "All subcategories" else subcategory_choice
 
     filters_key = (query, category, subcategory, sellable)
     if st.session_state.get("item_filters_key") != filters_key:

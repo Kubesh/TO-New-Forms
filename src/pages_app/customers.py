@@ -154,21 +154,25 @@ def _render_list() -> None:
         st.error(str(exc))
         return
 
-    col_type, col_state, col_chain = st.columns(3)
+    col_type, col_state, col_chain, col_ordered = st.columns([1, 1, 1, 1])
     with col_type:
         type_choice = st.selectbox("Account type", ["All types"] + [t.name for t in type_choices])
     with col_state:
         state_choice = st.selectbox("Shipping state", ["All states"] + state_choices)
     with col_chain:
         chain_choice = st.selectbox("Chain name", ["All chains"] + chain_choices)
+    with col_ordered:
+        st.markdown("<div style='height: 1.85rem'></div>", unsafe_allow_html=True)
+        ordered_only = st.checkbox("Ordered", help="Only show customers who have ever placed a purchase order.")
 
     type_id = None
     if type_choice != "All types":
         type_id = next(t.customer_type_id for t in type_choices if t.name == type_choice)
     shipping_state = None if state_choice == "All states" else state_choice
     chain_name = None if chain_choice == "All chains" else chain_choice
+    has_ordered = True if ordered_only else None
 
-    filters_key = (query, type_id, shipping_state, chain_name)
+    filters_key = (query, type_id, shipping_state, chain_name, has_ordered)
     if st.session_state.get("customer_filters_key") != filters_key:
         st.session_state["customer_filters_key"] = filters_key
         st.session_state["customer_page"] = 1
@@ -176,7 +180,7 @@ def _render_list() -> None:
 
     try:
         with session_scope() as session:
-            total = count_customers(session, query, type_id, shipping_state, chain_name)
+            total = count_customers(session, query, type_id, shipping_state, chain_name, has_ordered)
             total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
             page = min(max(page, 1), total_pages)
             st.session_state["customer_page"] = page
@@ -188,6 +192,7 @@ def _render_list() -> None:
                     type_id,
                     shipping_state,
                     chain_name,
+                    has_ordered,
                     limit=PAGE_SIZE,
                     offset=(page - 1) * PAGE_SIZE,
                 )

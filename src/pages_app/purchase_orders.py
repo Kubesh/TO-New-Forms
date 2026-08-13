@@ -296,8 +296,11 @@ def _render_detail(po_id: int) -> None:
             st.rerun()
         return
 
-    can_delete = po.voided and po.ship_date is None
-    col_back, col_edit, col_delete = st.columns([2, 1, 1])
+    if po.voided:
+        col_back, col_edit, col_delete = st.columns([2, 1, 1])
+    else:
+        col_back, col_edit = st.columns([3, 1])
+        col_delete = None
     with col_back:
         if st.button("← Back to list"):
             st.query_params.clear()
@@ -305,16 +308,10 @@ def _render_detail(po_id: int) -> None:
     with col_edit:
         if st.button("Edit purchase order", width="stretch"):
             edit_po_dialog(po.po_id)
-    with col_delete:
-        if st.button(
-            "Delete purchase order",
-            width="stretch",
-            disabled=not can_delete,
-            key="delete_po_btn",
-        ):
-            delete_po_confirm_dialog(po.po_id, po.po_number)
-    if not can_delete:
-        st.caption("Void this PO (and make sure it hasn't shipped) to enable delete.")
+    if col_delete is not None:
+        with col_delete:
+            if st.button("Delete purchase order", width="stretch", key="delete_po_btn"):
+                delete_po_confirm_dialog(po.po_id, po.po_number)
 
     st.header(po.po_number)
     if po.order_type:

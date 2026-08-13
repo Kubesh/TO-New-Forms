@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from src.models import Customer, CustomerContact, CustomerType
+from src.models import Customer, CustomerContact, CustomerType, PurchaseOrder
 
 
 def list_customer_types(session: Session) -> list[CustomerType]:
@@ -37,6 +37,7 @@ def _apply_customer_filters(
     customer_type_id: int | None = None,
     shipping_state: str | None = None,
     chain_name: str | None = None,
+    has_ordered: bool | None = None,
 ):
     if query:
         stmt = stmt.where(Customer.customer_name.ilike(f"%{query}%"))
@@ -46,6 +47,12 @@ def _apply_customer_filters(
         stmt = stmt.where(Customer.shipping_state == shipping_state)
     if chain_name:
         stmt = stmt.where(Customer.notes == chain_name)
+    if has_ordered:
+        stmt = stmt.where(
+            Customer.customer_id.in_(
+                select(PurchaseOrder.customer_id).where(PurchaseOrder.customer_id.isnot(None))
+            )
+        )
     return stmt
 
 
@@ -55,6 +62,7 @@ def count_customers(
     customer_type_id: int | None = None,
     shipping_state: str | None = None,
     chain_name: str | None = None,
+    has_ordered: bool | None = None,
 ) -> int:
     stmt = _apply_customer_filters(
         select(func.count()).select_from(Customer),
@@ -62,6 +70,7 @@ def count_customers(
         customer_type_id,
         shipping_state,
         chain_name,
+        has_ordered,
     )
     return session.scalar(stmt) or 0
 
@@ -72,6 +81,7 @@ def search_customers(
     customer_type_id: int | None = None,
     shipping_state: str | None = None,
     chain_name: str | None = None,
+    has_ordered: bool | None = None,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[Customer]:
@@ -79,7 +89,9 @@ def search_customers(
         joinedload(Customer.customer_type),
         joinedload(Customer.parent),
     )
-    stmt = _apply_customer_filters(stmt, query, customer_type_id, shipping_state, chain_name)
+    stmt = _apply_customer_filters(
+        stmt, query, customer_type_id, shipping_state, chain_name, has_ordered
+    )
     stmt = stmt.order_by(Customer.customer_name)
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)
