@@ -7,14 +7,20 @@ from src.pages_app.purchase_orders import purchase_orders_page
 st.set_page_config(
     page_title="Treehouse Originals",
     layout="wide",
-    initial_sidebar_state="expanded",
+    # "locked" keeps the sidebar permanently open with no collapse control on
+    # desktop (the old always-open behavior), but degrades gracefully on
+    # narrow/mobile viewports: starts collapsed there, with a hamburger button
+    # to open it and a close button inside it to dismiss it, rather than
+    # permanently covering the main content on a small screen.
+    initial_sidebar_state="locked",
 )
 
-# Keep the sidebar permanently open (no collapse/expand control), drop the
-# '#' anchor-link icons Streamlit adds to headers on hover, and layer on the
-# brand touches the native theme (.streamlit/config.toml) can't reach:
-# uppercase/letter-spaced nav and headings, and the bold 2px black borders
-# from the Treehouse Originals style guide.
+# Drop the '#' anchor-link icons Streamlit adds to headers on hover, and
+# layer on the brand touches the native theme (.streamlit/config.toml) can't
+# reach: uppercase/letter-spaced nav and headings, the bold 2px black
+# borders from the Treehouse Originals style guide, and a full-width
+# sidebar on mobile (its native "locked" mobile width is comfortable but
+# not full-screen).
 st.markdown(
     """
     <style>
@@ -27,18 +33,31 @@ st.markdown(
     html, body, .stApp, [class^="st-"], [class*=" st-"] {
         font-family: "Futura PT", "Source Sans", sans-serif !important;
     }
-    [data-testid="stSidebarCollapseButton"] { display: none !important; }
-    [data-testid="collapsedControl"] { display: none !important; }
     [data-testid="stSidebar"] {
-        transform: none !important;
-        visibility: visible !important;
-        min-width: 244px !important;
         border-right: 2px solid #1A1712 !important;
     }
-    [data-testid="stHeaderActionElements"] { display: none !important; }
-    [data-testid="stMainBlockContainer"] {
-        max-width: 65% !important;
+    @media (min-width: 768px) {
+        [data-testid="stSidebar"] {
+            min-width: 244px !important;
+        }
+        [data-testid="stMainBlockContainer"] {
+            max-width: 65% !important;
+        }
     }
+    @media (max-width: 767px) {
+        /* Only the expanded state is widened to fill the screen - the
+        collapsed state is left alone entirely. The hamburger-to-close
+        toggle button lives inside the sidebar and moves with it, so
+        overriding the collapsed width/transform too (to make it wider)
+        pushes that same button off-screen with the rest of the panel,
+        leaving no way to reopen it. */
+        [data-testid="stSidebar"][aria-expanded="true"] {
+            width: 100vw !important;
+            min-width: 100vw !important;
+            transform: translateX(0) !important;
+        }
+    }
+    [data-testid="stHeaderActionElements"] { display: none !important; }
     h1, h2, h3 {
         text-transform: uppercase;
         letter-spacing: 0.01em;
