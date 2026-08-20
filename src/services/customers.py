@@ -133,7 +133,31 @@ def list_customer_choices(
     return [tuple(row) for row in session.execute(stmt).all()]
 
 
+STORE_KEY_RANGE_START = 6000
+STORE_KEY_RANGE_END = 8000  # exclusive - the range is exhausted once this is hit
+
+
+def next_store_key(session: Session) -> int | None:
+    """Next store_key for a newly created customer: one past the current
+    max, or STORE_KEY_RANGE_START if none are assigned yet. Existing
+    store_key values are historical data carried over from the prior
+    system rather than a live sequence, so only values already inside our
+    6000-7999 range count toward that max - legacy values outside it (e.g.
+    from before this feature existed) are ignored. Returns None once the
+    range is exhausted, leaving store_key unset rather than overflowing
+    into legacy key territory."""
+    current_max = session.scalar(
+        select(func.max(Customer.store_key)).where(
+            Customer.store_key >= STORE_KEY_RANGE_START,
+            Customer.store_key < STORE_KEY_RANGE_END,
+        )
+    )
+    candidate = STORE_KEY_RANGE_START if current_max is None else current_max + 1
+    return candidate if candidate < STORE_KEY_RANGE_END else None
+
+
 def create_customer(session: Session, **fields) -> Customer:
+    fields.setdefault("store_key", next_store_key(session))
     customer = Customer(**fields)
     session.add(customer)
     session.commit()

@@ -4,6 +4,8 @@ import streamlit as st
 
 from src.db import session_scope
 from src.services.customers import (
+    STORE_KEY_RANGE_END,
+    STORE_KEY_RANGE_START,
     count_customers,
     create_customer,
     get_customer,
@@ -309,6 +311,12 @@ def _render_detail(customer_id: int) -> None:
             st.query_params.clear()
             st.rerun()
         return
+
+    if st.session_state.pop("store_key_range_exhausted", False):
+        st.warning(
+            f"This customer was created without a store key - the "
+            f"{STORE_KEY_RANGE_START}-{STORE_KEY_RANGE_END - 1} range is full."
+        )
 
     col_back, col_edit, col_archive = st.columns([2, 1, 1])
     with col_back:
@@ -652,6 +660,8 @@ def add_customer_dialog() -> None:
             else:
                 with session_scope() as session:
                     new_customer = create_customer(session, **values)
+                if new_customer.store_key is None:
+                    st.session_state["store_key_range_exhausted"] = True
                 st.query_params["customer_id"] = str(new_customer.customer_id)
                 st.rerun()
     with col_cancel:
