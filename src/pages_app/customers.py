@@ -9,6 +9,8 @@ from src.services.customers import (
     STORE_KEY_RANGE_START,
     count_customers,
     create_customer,
+    format_phone_number,
+    format_postal_code,
     get_customer,
     get_duplicate_customer_names,
     list_customer_choices,
@@ -28,6 +30,19 @@ from src.services.purchase_orders import (
 from src.services.sheets_sync import SheetsSyncNotConfigured, sync_customer
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_phone_formatting(values: dict) -> str | None:
+    """Reformats values["phone_number"] in place into the canonical mask.
+    Returns an error message if it's invalid, else None. A blank phone
+    number is left alone - it's an optional field."""
+    if not values["phone_number"]:
+        return None
+    formatted, error = format_phone_number(values["phone_number"])
+    if error:
+        return error
+    values["phone_number"] = formatted
+    return None
 
 
 def _sync_customer_to_sheet(customer) -> None:
@@ -530,7 +545,7 @@ def _render_customer_form(
         address_line2=shipping_address_line2.strip() or None,
         city=shipping_city.strip() or None,
         state=shipping_state.strip() or None,
-        postal_code=shipping_postal_code.strip() or None,
+        postal_code=format_postal_code(shipping_postal_code),
         country=shipping_country.strip() or None,
     )
 
@@ -589,7 +604,7 @@ def _render_customer_form(
             address_line2=billing_address_line2.strip() or None,
             city=billing_city.strip() or None,
             state=billing_state.strip() or None,
-            postal_code=billing_postal_code.strip() or None,
+            postal_code=format_postal_code(billing_postal_code),
             country=billing_country.strip() or None,
         )
 
@@ -653,8 +668,11 @@ def edit_customer_dialog(customer_id: int) -> None:
     col_save, col_cancel = st.columns(2)
     with col_save:
         if st.button("Save", type="primary", width="stretch", key="edit_save_btn"):
+            phone_error = _apply_phone_formatting(values)
             if not values["customer_name"]:
                 st.error("Customer name is required.")
+            elif phone_error:
+                st.error(phone_error)
             else:
                 with session_scope() as session:
                     updated_customer = update_customer(session, customer_id, **values)
@@ -679,8 +697,11 @@ def add_customer_dialog() -> None:
     col_save, col_cancel = st.columns(2)
     with col_save:
         if st.button("Save", type="primary", width="stretch", key="add_save_btn"):
+            phone_error = _apply_phone_formatting(values)
             if not values["customer_name"]:
                 st.error("Customer name is required.")
+            elif phone_error:
+                st.error(phone_error)
             else:
                 with session_scope() as session:
                     new_customer = create_customer(session, **values)

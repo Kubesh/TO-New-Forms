@@ -1,7 +1,58 @@
+import re
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from src.models import Customer, CustomerContact, CustomerType, PurchaseOrder
+
+PHONE_MIN_DIGITS = 10
+
+
+def format_phone_number(raw: str) -> tuple[str | None, str | None]:
+    """Normalize a phone number into our canonical mask.
+
+    Returns (formatted, error) - exactly one of which is not None. Only
+    digits are counted; everything else typed in (spaces, dashes, parens,
+    a leading +) is ignored.
+
+    - 10 digits  -> 000-000-0000
+    - 11+ digits -> +<country code> 000-000-0000, where everything before
+      the trailing 10 digits becomes the country code, e.g. 11 digits ->
+      "+0 000-000-0000", 13 digits -> "+000 000-000-0000".
+    - Under 10 digits is rejected rather than guessed at.
+    """
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) < PHONE_MIN_DIGITS:
+        return None, f"Phone number must have at least {PHONE_MIN_DIGITS} digits."
+    local = digits[-PHONE_MIN_DIGITS:]
+    formatted_local = f"{local[0:3]}-{local[3:6]}-{local[6:10]}"
+    country_code = digits[:-PHONE_MIN_DIGITS]
+    if country_code:
+        return f"+{country_code} {formatted_local}", None
+    return formatted_local, None
+
+
+def format_postal_code(raw: str) -> str | None:
+    """Normalize a postal code by its length, matching common formats:
+
+    - 5 characters -> 00000 (US ZIP)
+    - 6 characters -> XXX XXX (Canadian postal code)
+    - 9 characters -> 00000-0000 (US ZIP+4)
+    - any other length -> left as typed, just cleaned up
+
+    Unlike phone numbers, no length is rejected here - this is formatting
+    only, not validation.
+    """
+    cleaned = re.sub(r"[^0-9A-Za-z]", "", raw).upper()
+    if not cleaned:
+        return None
+    if len(cleaned) == 5:
+        return cleaned
+    if len(cleaned) == 6:
+        return f"{cleaned[:3]} {cleaned[3:]}"
+    if len(cleaned) == 9:
+        return f"{cleaned[:5]}-{cleaned[5:]}"
+    return cleaned
 
 
 def list_customer_types(session: Session) -> list[CustomerType]:
