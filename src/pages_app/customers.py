@@ -1,4 +1,5 @@
 import html
+import logging
 
 import streamlit as st
 
@@ -24,6 +25,27 @@ from src.services.purchase_orders import (
     get_po_line_item_stats,
     list_purchase_orders_for_customer,
 )
+from src.services.sheets_sync import SheetsSyncNotConfigured, sync_customer
+
+logger = logging.getLogger(__name__)
+
+
+def _sync_customer_to_sheet(customer) -> None:
+    """Best-effort: a sync failure shouldn't block saving the customer
+    record itself, which has already committed by the time this runs."""
+    try:
+        sync_customer(customer)
+    except SheetsSyncNotConfigured:
+        pass
+    except Exception:
+        logger.exception(
+            "Google Sheets sync failed for customer_id=%s", customer.customer_id
+        )
+        st.toast(
+            "Saved, but couldn't sync to the tracking sheet - check the server logs.",
+            icon="⚠️",
+        )
+
 
 ADDRESS_FIELDS = (
     "address_line1",
@@ -635,7 +657,9 @@ def edit_customer_dialog(customer_id: int) -> None:
                 st.error("Customer name is required.")
             else:
                 with session_scope() as session:
-                    update_customer(session, customer_id, **values)
+                    updated_customer = update_customer(session, customer_id, **values)
+                    if updated_customer is not None:
+                        _sync_customer_to_sheet(updated_customer)
                 st.rerun()
     with col_cancel:
         if st.button("Cancel", width="stretch", key="edit_cancel_btn"):
@@ -660,6 +684,7 @@ def add_customer_dialog() -> None:
             else:
                 with session_scope() as session:
                     new_customer = create_customer(session, **values)
+                    _sync_customer_to_sheet(new_customer)
                 if new_customer.store_key is None:
                     st.session_state["store_key_range_exhausted"] = True
                 st.query_params["customer_id"] = str(new_customer.customer_id)
