@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from src.models import Customer, PurchaseOrder, PurchaseOrderLineItem
@@ -6,7 +6,12 @@ from src.models import Customer, PurchaseOrder, PurchaseOrderLineItem
 
 def _apply_po_filters(stmt, query: str | None = None, customer_id: int | None = None):
     if query:
-        stmt = stmt.where(PurchaseOrder.po_number.ilike(f"%{query}%"))
+        stmt = stmt.where(
+            or_(
+                PurchaseOrder.po_number.ilike(f"%{query}%"),
+                PurchaseOrder.customer.has(Customer.customer_name.ilike(f"%{query}%")),
+            )
+        )
     if customer_id is not None:
         stmt = stmt.where(PurchaseOrder.customer_id == customer_id)
     return stmt

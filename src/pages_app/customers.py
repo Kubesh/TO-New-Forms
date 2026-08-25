@@ -294,14 +294,19 @@ def _render_pagination(page: int, total_pages: int, total: int) -> None:
             st.rerun()
 
 
+def _shipping_address_line(customer) -> str:
+    """Single-line shipping address for the customer card, matching the
+    city/state/zip formatting used on the detail page's address block."""
+    city_state = ", ".join(filter(None, [customer.shipping_city, customer.shipping_state]))
+    city_state_zip = " ".join(filter(None, [city_state, customer.shipping_postal_code]))
+    return ", ".join(filter(None, [customer.shipping_address_line1, city_state_zip]))
+
+
 def _card_html(customer, is_duplicate: bool, po_count: int = 0) -> str:
     name = html.escape(customer.customer_name)
     type_name = html.escape(customer.customer_type.name) if customer.customer_type else None
     parent_name = html.escape(customer.parent.customer_name) if customer.parent else None
-
-    city = customer.billing_city or customer.shipping_city
-    state = customer.billing_state or customer.shipping_state
-    location = html.escape(", ".join(filter(None, [city, state])))
+    location = html.escape(_shipping_address_line(customer))
 
     card_classes = "customer-card"
     if customer.parent_id:

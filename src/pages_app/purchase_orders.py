@@ -216,7 +216,7 @@ def purchase_orders_page() -> None:
 def _render_list() -> None:
     query = st.text_input(
         "Search purchase orders",
-        placeholder="Search by PO number…",
+        placeholder="Search by PO number or customer name…",
         label_visibility="collapsed",
     )
 
