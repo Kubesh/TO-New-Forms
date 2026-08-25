@@ -92,6 +92,51 @@ st.markdown(
         }
     }
     [data-testid="stHeaderActionElements"] { display: none !important; }
+    /* Deploy button in the top-right header bar - not relevant once this
+    is already running as a standalone deployment. */
+    [data-testid="stAppDeployButton"] { display: none !important; }
+    /* The running-script indicator (a little running-man icon plus a
+    "Stop" button) normally docks in the top-right header. Recenter its
+    container on the viewport, then swap its default icon/button for a
+    spinning version of the brand mark - it's now purely a "hang on"
+    signal rather than an interactive stop control. display is
+    deliberately left alone here - Streamlit toggles it (inline, no
+    !important) to actually hide this element once the script finishes,
+    and a forced !important display would win that fight and leave it
+    stuck on screen permanently. */
+    [data-testid="stStatusWidget"] {
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        z-index: 9999 !important;
+        width: 56px !important;
+        height: 56px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        border: none !important;
+        pointer-events: none !important;
+    }
+    [data-testid="stStatusWidget"] > div {
+        display: none !important;
+    }
+    [data-testid="stStatusWidget"]::before {
+        content: "";
+        display: block;
+        width: 100%;
+        height: 100%;
+        background-image: url('/app/static/images/treehouse-logo.png');
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        animation: tp-logo-spin 1s linear infinite;
+    }
+    @keyframes tp-logo-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
     /* The auto-close/favicon helper below runs in a 1px-tall iframe so it's
     invisible, but on iOS Safari a scrollable iframe (even a hidden one)
     can show its native scroll-indicator pill floating in the sidebar -
