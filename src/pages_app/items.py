@@ -379,8 +379,13 @@ def edit_item_dialog(item_id: int) -> None:
             key=f"{state_prefix}sellable_weight",
         )
 
-    measured_in = st.text_input(
-        "Measured in", value=item.measured_in or "", key=f"{state_prefix}measured_in"
+    measured_in_options = ["Eaches", "Pounds"]
+    current_measured_in = item.measured_in if item.measured_in in measured_in_options else "Eaches"
+    measured_in = st.selectbox(
+        "Measured in",
+        measured_in_options,
+        index=measured_in_options.index(current_measured_in),
+        key=f"{state_prefix}measured_in",
     )
 
     col5, col6 = st.columns(2)

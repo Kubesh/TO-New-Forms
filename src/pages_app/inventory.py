@@ -300,8 +300,8 @@ def _render_count_mode(rows: list, color_map: dict[str, str]) -> None:
                         st.rerun()
 
     border_css_rules = "\n".join(
-        f".st-key-{row_key} {{ border-left: 4px solid {color}; "
-        "border-radius: 0.5rem; padding: 0.25rem 0.5rem 0.25rem 0.75rem; }"
+        f".st-key-{row_key} {{ border: 2px solid #1A1712; border-left: 6px solid {color}; "
+        "border-radius: 0.625rem; padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; }"
         for row_key, color in category_border_keys.items()
     )
     st.markdown(f"<style>{border_css_rules}</style>", unsafe_allow_html=True)
