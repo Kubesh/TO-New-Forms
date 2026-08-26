@@ -92,14 +92,11 @@ st.markdown(
         }
     }
     [data-testid="stHeaderActionElements"] { display: none !important; }
-    /* Deploy button in the top-right header bar - not relevant once this
-    is already running as a standalone deployment. */
-    [data-testid="stAppDeployButton"] { display: none !important; }
-    /* The "⋮" main menu - Rerun/Settings/Clear cache/About - isn't
-    something anyone here needs; see the sidebar's hotkey-blocking script
-    below for why Clear cache also needed disabling at the
-    keyboard-shortcut level, not just here. */
-    [data-testid="stMainMenu"] { display: none !important; }
+    /* Deploy button and the "⋮" menu (Rerun/Settings/Clear cache/About)
+    are removed via client.toolbarMode = "minimal" in
+    .streamlit/config.toml, not CSS - that also stops Clear cache's "C"
+    keyboard shortcut from registering at all, which CSS alone can't do
+    (it was still intercepting Cmd/Ctrl+C before this). */
     /* The running-script indicator (a little running-man icon plus a
     "Stop" button) normally docks in the top-right header. Recenter its
     container on the viewport, then swap its default icon/button for a
@@ -244,14 +241,6 @@ with st.sidebar:
     # to register it, which isn't reliably the case at page-config time, so
     # it silently falls back to Streamlit's own icon instead of raising.
     # Setting the <link rel="icon"> directly here is a guaranteed override.
-    #
-    # It also stops Streamlit's "Clear cache" shortcut from hijacking
-    # copy: that menu action's global hotkey is the bare "C" key with no
-    # modifier check, so Cmd/Ctrl+C triggers it too, right alongside (or
-    # instead of) the browser's normal copy. Intercepting keydown/keyup in
-    # the capture phase - before Streamlit's own document-level listener
-    # ever sees them - stops that without touching normal copy/paste,
-    # since we never call preventDefault().
     st.iframe(
         """
         <style>
@@ -268,21 +257,6 @@ with st.sidebar:
             }
             iconLink.type = 'image/png';
             iconLink.href = '/app/static/images/treehouse-logo.png';
-
-            if (!window.parent.__tpCacheHotkeyBlocked) {
-                window.parent.__tpCacheHotkeyBlocked = true;
-                const blockCopyHotkey = function (e) {
-                    if ((e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 'c') {
-                        e.stopImmediatePropagation();
-                        e.stopPropagation();
-                    }
-                };
-                // Streamlit's hotkey library listens on both keydown and
-                // keyup, so both need intercepting - only stopping one
-                // would still let the other through to trigger it.
-                window.parent.addEventListener('keydown', blockCopyHotkey, true);
-                window.parent.addEventListener('keyup', blockCopyHotkey, true);
-            }
 
             if (window.parent.__tpSidebarAutoClose) return;
             window.parent.__tpSidebarAutoClose = true;

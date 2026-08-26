@@ -1,6 +1,14 @@
 [server]
 enableStaticServing = true
 
+# "minimal" strips the toolbar/menu down to only externally-set options
+# (none, here) and hides the menu entirely once it's empty - this removes
+# Deploy, Rerun, and Clear cache (menu item *and* its "C" keyboard
+# shortcut, which was intercepting Cmd/Ctrl+C) at the source, rather than
+# hiding already-mounted components after the fact.
+[client]
+toolbarMode = "minimal"
+
 [theme]
 base = "light"
 primaryColor = "#F4591A"
