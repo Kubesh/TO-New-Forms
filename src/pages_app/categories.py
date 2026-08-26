@@ -153,29 +153,45 @@ def _render_detail(category_id: int) -> None:
         unsafe_allow_html=True,
     )
 
-    st.subheader("Subcategories")
-    if subcategories:
-        for sub in subcategories:
-            st.write(f"• {sub.name}")
-    else:
-        st.caption("No subcategories yet.")
     if st.button("+ Add Subcategory", key="cat_add_sub"):
         add_category_dialog(parent_id=category.category_id, parent_name=category.name)
 
-    st.subheader("Items in this category")
+    tab_labels = ["All Items"] + [sub.name for sub in subcategories]
+    tabs = st.tabs(tab_labels)
+
+    with tabs[0]:
+        _render_item_list(items, show_subcategory=True)
+
+    if subcategories:
+        try:
+            with session_scope() as session:
+                items_by_subcategory = {
+                    sub.name: list_items_in_category(session, category.name, sub.name)
+                    for sub in subcategories
+                }
+        except RuntimeError as exc:
+            st.error(str(exc))
+            return
+
+        for sub, tab in zip(subcategories, tabs[1:]):
+            with tab:
+                _render_item_list(items_by_subcategory[sub.name], show_subcategory=False)
+
+
+def _render_item_list(items, show_subcategory: bool) -> None:
     if not items:
-        st.caption("No items in this category yet.")
-    else:
-        for item in items:
-            subcat = f" — {item.subcategory}" if item.subcategory else ""
-            st.markdown(
-                f'<a href="/items?item_id={item.item_id}" target="_self" '
-                f'style="color: inherit; text-decoration: none;">'
-                f"<div style='padding: 0.4rem 0; border-bottom: 1px solid rgba(26,23,18,0.12);'>"
-                f"<strong>{html.escape(item.name)}</strong>{html.escape(subcat)}"
-                f"</div></a>",
-                unsafe_allow_html=True,
-            )
+        st.caption("No items here yet.")
+        return
+    for item in items:
+        subcat = f" — {item.subcategory}" if show_subcategory and item.subcategory else ""
+        st.markdown(
+            f'<a href="/items?item_id={item.item_id}" target="_self" '
+            f'style="color: inherit; text-decoration: none;">'
+            f"<div style='padding: 0.4rem 0; border-bottom: 1px solid rgba(26,23,18,0.12);'>"
+            f"<strong>{html.escape(item.name)}</strong>{html.escape(subcat)}"
+            f"</div></a>",
+            unsafe_allow_html=True,
+        )
 
 
 @st.dialog("Add category")
