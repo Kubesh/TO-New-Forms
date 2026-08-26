@@ -3,7 +3,9 @@ import html
 import streamlit as st
 
 from src.db import session_scope
+from src.pages_app.category_colors import category_color
 from src.services.inventory import create_inventory_count, list_inventory
+from src.services.items import list_distinct_categories
 
 INVENTORY_TABLE_CSS = """
 <style>
@@ -23,6 +25,7 @@ INVENTORY_TABLE_CSS = """
 }
 .inv-card {
     border: 2px solid #1A1712;
+    border-left: 6px solid var(--inv-cat-color, #1A1712);
     border-radius: 0.625rem;
     padding: 0.85rem 1.25rem;
     width: 100%;
@@ -109,6 +112,7 @@ def inventory_page() -> None:
     try:
         with session_scope() as session:
             rows = list_inventory(session, query=query)
+            sorted_categories = sorted(list_distinct_categories(session))
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -118,26 +122,27 @@ def inventory_page() -> None:
         return
 
     if count_mode:
-        _render_count_mode(rows)
+        _render_count_mode(rows, sorted_categories)
     else:
-        _render_table(rows)
+        _render_table(rows, sorted_categories)
 
 
-def _render_table(rows: list) -> None:
+def _render_table(rows: list, sorted_categories: list[str]) -> None:
     header_labels = ["Category", "Sub Category", "Item", "Current On Hand"]
     header = (
         '<div class="inv-table-header">'
         + "".join(f"<div>{label}</div>" for label in header_labels)
         + "</div>"
     )
-    rows_html = "".join(_row_html(item, on_hand) for item, on_hand in rows)
+    rows_html = "".join(_row_html(item, on_hand, sorted_categories) for item, on_hand in rows)
     st.markdown(
         f'{INVENTORY_TABLE_CSS}{header}<div class="inv-card-list">{rows_html}</div>',
         unsafe_allow_html=True,
     )
 
 
-def _row_html(item, current_on_hand: int | None) -> str:
+def _row_html(item, current_on_hand: int | None, sorted_categories: list[str]) -> str:
+    color = category_color(item.category, sorted_categories)
     category = html.escape(item.category or "—")
     subcategory = html.escape(item.subcategory or "—")
     name = html.escape(item.name)
@@ -153,7 +158,7 @@ def _row_html(item, current_on_hand: int | None) -> str:
     )
     return (
         f'<a class="inv-row-link" href="/items?item_id={item.item_id}" target="_self">'
-        f'<div class="inv-card">{row}</div></a>'
+        f'<div class="inv-card" style="--inv-cat-color: {color};">{row}</div></a>'
     )
 
 
@@ -166,7 +171,7 @@ def _clear_count_mode_state(rows: list) -> None:
     st.session_state.pop("inv_confirmed_ids", None)
 
 
-def _render_count_mode(rows: list) -> None:
+def _render_count_mode(rows: list, sorted_categories: list[str]) -> None:
     confirmed_ids: set[int] = st.session_state.setdefault("inv_confirmed_ids", set())
 
     header_cols = st.columns([1.2, 1.2, 2, 1, 1, 1.4, 1])
@@ -177,6 +182,8 @@ def _render_count_mode(rows: list) -> None:
             st.caption(label)
 
     highlighted_row_keys = []
+    checked_button_keys = []
+    category_border_keys: dict[str, str] = {}
     row_keys_by_item: dict[int, tuple[str, str]] = {}
     for item, current_on_hand in rows:
         # The generation suffix lets Revert force a brand-new widget instance
@@ -190,12 +197,17 @@ def _render_count_mode(rows: list) -> None:
         count_key = f"inv_count_{item.item_id}_{gen}"
         note_key = f"inv_note_{item.item_id}_{gen}"
         row_key = f"inv_row_{item.item_id}"
+        check_key = f"inv_check_{item.item_id}"
         row_keys_by_item[item.item_id] = (count_key, note_key)
         is_confirmed = item.item_id in confirmed_ids
+
+        category_border_keys[row_key] = category_color(item.category, sorted_categories)
 
         counted_value = st.session_state.get(count_key)
         if counted_value is not None:
             highlighted_row_keys.append(row_key)
+            if not is_confirmed:
+                checked_button_keys.append(check_key)
 
         with st.container(key=row_key):
             row_cols = st.columns([1.2, 1.2, 2, 1, 1, 1.4, 1])
@@ -207,10 +219,25 @@ def _render_count_mode(rows: list) -> None:
                 st.write(item.name)
             with row_cols[3]:
                 st.write(str(current_on_hand) if current_on_hand is not None else "—")
+
+            # The fields stay real widgets even when confirmed (just
+            # disabled) rather than being swapped for plain text - a keyed
+            # widget that stops being instantiated on a run gets its
+            # session_state entry pruned by Streamlit as orphaned, which
+            # silently wiped a confirmed row's count as soon as a
+            # *different* row triggered the next rerun. Passing the
+            # already-known value/note explicitly (rather than a hardcoded
+            # None/"") matters specifically for disabled widgets - unlike an
+            # enabled widget (where `value=` is only honored on first
+            # creation and session_state wins after), a disabled widget
+            # re-applies `value=` on every rerun, so a hardcoded None was
+            # blanking the display and the stored value right after
+            # confirming even though the field was never touched again.
+            note_value = st.session_state.get(note_key) or ""
             with row_cols[4]:
                 st.number_input(
                     "Counted",
-                    value=None,
+                    value=counted_value,
                     min_value=0,
                     step=1,
                     disabled=is_confirmed,
@@ -220,23 +247,45 @@ def _render_count_mode(rows: list) -> None:
             with row_cols[5]:
                 st.text_input(
                     "Note",
-                    value="",
+                    value=note_value,
                     disabled=is_confirmed,
                     key=note_key,
                     label_visibility="collapsed",
                 )
+
             with row_cols[6]:
-                check_col, revert_col = st.columns(2)
-                with check_col:
-                    if st.button(
-                        "✓",
-                        key=f"inv_check_{item.item_id}",
-                        disabled=is_confirmed or counted_value is None,
-                        help="Confirm this count",
-                        width="stretch",
-                    ):
-                        confirmed_ids.add(item.item_id)
-                        st.rerun()
+                action_col, revert_col = st.columns(2)
+                with action_col:
+                    if is_confirmed:
+                        if st.button(
+                            "✎",
+                            key=f"inv_edit_{item.item_id}",
+                            help="Edit this count",
+                            width="stretch",
+                        ):
+                            confirmed_ids.discard(item.item_id)
+                            st.rerun()
+                    else:
+                        # Deliberately not disabled when empty - a disabled
+                        # button can't be clicked at all, which forced users
+                        # to click away from the Counted field first (to
+                        # trigger the rerun that enables it) before they
+                        # could click Check. Leaving it always clickable and
+                        # validating on click means typing a count and
+                        # clicking Check in one motion works: the browser
+                        # blurs (and so commits) the Counted field before the
+                        # button's own click is processed.
+                        if st.button(
+                            "✓",
+                            key=check_key,
+                            help="Confirm this count",
+                            width="stretch",
+                        ):
+                            if st.session_state.get(count_key) is None:
+                                st.toast("Enter a count before confirming.", icon="⚠️")
+                            else:
+                                confirmed_ids.add(item.item_id)
+                                st.rerun()
                 with revert_col:
                     if st.button(
                         "↺",
@@ -250,11 +299,25 @@ def _render_count_mode(rows: list) -> None:
                         confirmed_ids.discard(item.item_id)
                         st.rerun()
 
+    border_css_rules = "\n".join(
+        f".st-key-{row_key} {{ border-left: 4px solid {color}; "
+        "border-radius: 0.5rem; padding: 0.25rem 0.5rem 0.25rem 0.75rem; }"
+        for row_key, color in category_border_keys.items()
+    )
+    st.markdown(f"<style>{border_css_rules}</style>", unsafe_allow_html=True)
+
     if highlighted_row_keys:
         css_rules = "\n".join(
-            f'.st-key-{key} {{ background-color: rgba(250, 204, 21, 0.25); '
-            "border-radius: 0.5rem; padding: 0.25rem 0.5rem; }}"
+            f'.st-key-{key} {{ background-color: rgba(250, 204, 21, 0.25); }}'
             for key in highlighted_row_keys
+        )
+        st.markdown(f"<style>{css_rules}</style>", unsafe_allow_html=True)
+
+    if checked_button_keys:
+        css_rules = "\n".join(
+            f'.st-key-{key} button {{ background-color: rgba(5, 150, 105, 0.85); '
+            "border-color: #059669; color: white; }"
+            for key in checked_button_keys
         )
         st.markdown(f"<style>{css_rules}</style>", unsafe_allow_html=True)
 

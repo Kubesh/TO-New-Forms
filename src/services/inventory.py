@@ -39,7 +39,9 @@ def list_inventory(
         stmt = stmt.where(Item.category == category)
     if subcategory:
         stmt = stmt.where(Item.subcategory == subcategory)
-    stmt = stmt.order_by(Item.category, Item.subcategory, Item.name)
+    stmt = stmt.order_by(
+        Item.sellable.desc(), Item.category, Item.subcategory, Item.name
+    )
     return [tuple(row) for row in session.execute(stmt).all()]
 
 

@@ -675,7 +675,7 @@ def edit_po_dialog(po_id: int) -> None:
     if highlighted_row_keys:
         css_rules = "\n".join(
             f'.st-key-{key} {{ background-color: rgba(250, 204, 21, 0.25); '
-            "border-radius: 0.5rem; padding: 0.25rem 0.5rem; }}"
+            "border-radius: 0.5rem; padding: 0.25rem 0.5rem; }"
             for key in highlighted_row_keys
         )
         st.markdown(f"<style>{css_rules}</style>", unsafe_allow_html=True)
