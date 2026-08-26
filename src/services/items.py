@@ -47,6 +47,18 @@ def list_shipping_material_choices(
     return [tuple(row) for row in session.execute(stmt).all()]
 
 
+def list_all_item_choices(
+    session: Session, exclude_item_ids=None
+) -> list[tuple[int, str, str, str | None]]:
+    """(item_id, sku, name, subcategory) tuples for every item, unfiltered -
+    an assembly can consume or produce any item, not just sellable ones."""
+    stmt = select(Item.item_id, Item.sku, Item.name, Item.subcategory)
+    if exclude_item_ids:
+        stmt = stmt.where(Item.item_id.notin_(exclude_item_ids))
+    stmt = stmt.order_by(Item.sku)
+    return [tuple(row) for row in session.execute(stmt).all()]
+
+
 def list_distinct_categories(session: Session) -> list[str]:
     stmt = (
         select(Item.category)

@@ -221,3 +221,36 @@ class InventoryCountItem(Base, TimestampMixin):
 
     inventory_count: Mapped["InventoryCount"] = relationship(back_populates="items")
     item: Mapped["Item"] = relationship()
+
+
+class Assembly(Base, TimestampMixin):
+    """A recipe that converts some items into others in a batch - e.g.
+    breaking bulk soil down into bagged units, or combining components into
+    a kit. The actual item-level effects (what's consumed, what's produced)
+    live in AssemblyItem, not here."""
+
+    __tablename__ = "assemblies"
+
+    assembly_id: Mapped[int] = mapped_column(primary_key=True)
+    assembly_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    version_name: Mapped[str | None] = mapped_column(String(100))
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    items: Mapped[list["AssemblyItem"]] = relationship(
+        back_populates="assembly", cascade="all, delete-orphan"
+    )
+
+
+class AssemblyItem(Base, TimestampMixin):
+    """One product's role in an assembly - amount is negative for a product
+    consumed by the assembly, positive for a product it produces."""
+
+    __tablename__ = "assembly_items"
+
+    assembly_item_id: Mapped[int] = mapped_column(primary_key=True)
+    assembly_id: Mapped[int] = mapped_column(ForeignKey("assemblies.assembly_id"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("items.item_id"), nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    assembly: Mapped["Assembly"] = relationship(back_populates="items")
+    product: Mapped["Item"] = relationship()
