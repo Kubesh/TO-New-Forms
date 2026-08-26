@@ -168,6 +168,26 @@ class OrderShippingMaterial(Base, TimestampMixin):
     item: Mapped["Item"] = relationship()
 
 
+class Category(Base, TimestampMixin):
+    """Both top-level categories and subcategories live in this one table -
+    a subcategory is just a row whose parent_id points at its parent
+    category's row. color is only really meaningful for top-level rows
+    (it drives the card-indicator color everywhere categories are shown)
+    but isn't restricted at the schema level."""
+
+    __tablename__ = "categories"
+
+    category_id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("categories.category_id"))
+    color: Mapped[str | None] = mapped_column(String(20))
+
+    parent: Mapped["Category | None"] = relationship(
+        remote_side="Category.category_id", back_populates="subcategories"
+    )
+    subcategories: Mapped[list["Category"]] = relationship(back_populates="parent")
+
+
 class InventoryCount(Base, TimestampMixin):
     """A single physical-count session. Deliberately minimal beyond the
     timestamps - kept separate from InventoryCountItem so more fields

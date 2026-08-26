@@ -4,8 +4,8 @@ import streamlit as st
 
 from src.db import session_scope
 from src.pages_app.category_colors import category_color
+from src.services.categories import get_category_color_map
 from src.services.inventory import create_inventory_count, list_inventory
-from src.services.items import list_distinct_categories
 
 INVENTORY_TABLE_CSS = """
 <style>
@@ -112,7 +112,7 @@ def inventory_page() -> None:
     try:
         with session_scope() as session:
             rows = list_inventory(session, query=query)
-            sorted_categories = sorted(list_distinct_categories(session))
+            color_map = get_category_color_map(session)
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -122,27 +122,27 @@ def inventory_page() -> None:
         return
 
     if count_mode:
-        _render_count_mode(rows, sorted_categories)
+        _render_count_mode(rows, color_map)
     else:
-        _render_table(rows, sorted_categories)
+        _render_table(rows, color_map)
 
 
-def _render_table(rows: list, sorted_categories: list[str]) -> None:
+def _render_table(rows: list, color_map: dict[str, str]) -> None:
     header_labels = ["Category", "Sub Category", "Item", "Current On Hand"]
     header = (
         '<div class="inv-table-header">'
         + "".join(f"<div>{label}</div>" for label in header_labels)
         + "</div>"
     )
-    rows_html = "".join(_row_html(item, on_hand, sorted_categories) for item, on_hand in rows)
+    rows_html = "".join(_row_html(item, on_hand, color_map) for item, on_hand in rows)
     st.markdown(
         f'{INVENTORY_TABLE_CSS}{header}<div class="inv-card-list">{rows_html}</div>',
         unsafe_allow_html=True,
     )
 
 
-def _row_html(item, current_on_hand: int | None, sorted_categories: list[str]) -> str:
-    color = category_color(item.category, sorted_categories)
+def _row_html(item, current_on_hand: int | None, color_map: dict[str, str]) -> str:
+    color = category_color(item.category, color_map)
     category = html.escape(item.category or "—")
     subcategory = html.escape(item.subcategory or "—")
     name = html.escape(item.name)
@@ -171,7 +171,7 @@ def _clear_count_mode_state(rows: list) -> None:
     st.session_state.pop("inv_confirmed_ids", None)
 
 
-def _render_count_mode(rows: list, sorted_categories: list[str]) -> None:
+def _render_count_mode(rows: list, color_map: dict[str, str]) -> None:
     confirmed_ids: set[int] = st.session_state.setdefault("inv_confirmed_ids", set())
 
     header_cols = st.columns([1.2, 1.2, 2, 1, 1, 1.4, 1])
@@ -201,7 +201,7 @@ def _render_count_mode(rows: list, sorted_categories: list[str]) -> None:
         row_keys_by_item[item.item_id] = (count_key, note_key)
         is_confirmed = item.item_id in confirmed_ids
 
-        category_border_keys[row_key] = category_color(item.category, sorted_categories)
+        category_border_keys[row_key] = category_color(item.category, color_map)
 
         counted_value = st.session_state.get(count_key)
         if counted_value is not None:

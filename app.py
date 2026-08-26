@@ -2,6 +2,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from src.pages_app.categories import categories_page
 from src.pages_app.customers import customers_page
 from src.pages_app.inventory import inventory_page
 from src.pages_app.items import items_page
@@ -159,6 +160,10 @@ st.markdown(
         font-size: 0.85rem;
         letter-spacing: 0.03em;
     }
+    .st-key-tp-sidebar-subnav [data-testid="stPageLink"] {
+        margin-left: 1.1rem;
+        font-size: 0.78rem;
+    }
     .tp-sidebar-brand {
         padding-bottom: 1rem;
         margin-bottom: 0.75rem;
@@ -199,6 +204,7 @@ purchase_orders = st.Page(
     purchase_orders_page, title="Purchase Orders", url_path="purchase-orders"
 )
 inventory = st.Page(inventory_page, title="Inventory", url_path="inventory")
+categories = st.Page(categories_page, title="Categories", url_path="categories")
 items = st.Page(items_page, title="Items", url_path="items")
 
 # Build the nav ourselves (position="hidden") so the sidebar always renders,
@@ -208,7 +214,7 @@ pg = st.navigation(
     {
         "Customers": [customers],
         "Purchase Orders": [purchase_orders],
-        "Inventory": [inventory],
+        "Inventory": [inventory, categories],
         "Items": [items],
     },
     position="hidden",
@@ -231,6 +237,8 @@ with st.sidebar:
     st.page_link(customers, label="Customers")
     st.page_link(purchase_orders, label="Purchase Orders")
     st.page_link(inventory, label="Inventory")
+    with st.container(key="tp-sidebar-subnav"):
+        st.page_link(categories, label="Categories")
     st.page_link(items, label="Items")
 
     # Streamlit's page navigation is a client-side transition, not a full

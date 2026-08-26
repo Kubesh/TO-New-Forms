@@ -4,6 +4,7 @@ import streamlit as st
 
 from src.db import session_scope
 from src.pages_app.category_colors import category_color
+from src.services.categories import get_category_color_map
 from src.services.items import (
     count_items,
     get_item,
@@ -101,6 +102,7 @@ def _render_list() -> None:
     try:
         with session_scope() as session:
             categories = list_distinct_categories(session)
+            color_map = get_category_color_map(session)
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -177,8 +179,7 @@ def _render_list() -> None:
         st.info("No items found.")
         return
 
-    sorted_categories = sorted(categories)
-    cards_html = "".join(_card_html(item, sorted_categories) for item in items)
+    cards_html = "".join(_card_html(item, color_map) for item in items)
     st.markdown(
         f'{ITEM_CARD_CSS}<div class="item-card-list">{cards_html}</div>',
         unsafe_allow_html=True,
@@ -208,8 +209,8 @@ def _render_pagination(page: int, total_pages: int, total: int) -> None:
             st.rerun()
 
 
-def _card_html(item, sorted_categories: list[str]) -> str:
-    color = category_color(item.category, sorted_categories)
+def _card_html(item, color_map: dict[str, str]) -> str:
+    color = category_color(item.category, color_map)
     name = html.escape(item.name)
     sku = html.escape(item.sku)
     subcategory_bits = [b for b in [item.category, item.subcategory] if b]
