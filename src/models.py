@@ -95,8 +95,7 @@ class Item(Base, TimestampMixin):
     item_id: Mapped[int] = mapped_column(primary_key=True)
     sku: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    category: Mapped[str | None] = mapped_column(String(100))
-    subcategory: Mapped[str | None] = mapped_column(String(100))
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.category_id"))
     search_terms: Mapped[str | None] = mapped_column(Text)
     measured_in: Mapped[str | None] = mapped_column(String(50))
     unit_weight_lb: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
@@ -108,6 +107,7 @@ class Item(Base, TimestampMixin):
         Boolean, default=False, server_default="false"
     )
 
+    category: Mapped["Category | None"] = relationship()
     line_items: Mapped[list["PurchaseOrderLineItem"]] = relationship(back_populates="item")
 
 

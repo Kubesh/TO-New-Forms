@@ -5,6 +5,7 @@ from decimal import Decimal
 import streamlit as st
 
 from src.db import session_scope
+from src.services.categories import subcategory_name
 from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
 from src.services.order_types import list_order_type_names, resolve_default_order_type
@@ -414,7 +415,7 @@ def _render_detail(po_id: int) -> None:
             rows.append(
                 {
                     "SKU": li.sku or (li.item.sku if li.item else ""),
-                    "Subcategory": (li.item.subcategory if li.item else None) or "",
+                    "Subcategory": (subcategory_name(li.item.category) if li.item else None) or "",
                     "Item": li.item.name if li.item else (li.item_description or ""),
                     "Current Quantity": li.quantity,
                 }
@@ -648,7 +649,7 @@ def edit_po_dialog(po_id: int) -> None:
             with st.container(key=row_key):
                 row_cols = st.columns([1.1, 1.3, 2.1, 1, 1])
                 sku_label = li.sku or (li.item.sku if li.item else "")
-                subcategory = (li.item.subcategory if li.item else None) or "—"
+                subcategory = (subcategory_name(li.item.category) if li.item else None) or "—"
                 item_name = li.item.name if li.item else (li.item_description or "Unknown item")
                 with row_cols[0]:
                     st.write(sku_label)

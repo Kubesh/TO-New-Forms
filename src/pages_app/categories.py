@@ -9,6 +9,7 @@ from src.services.categories import (
     list_items_in_category,
     list_subcategories,
     list_top_level_categories,
+    subcategory_name,
     update_category,
 )
 
@@ -130,7 +131,7 @@ def _render_detail(category_id: int) -> None:
                     st.rerun()
                 return
             subcategories = list_subcategories(session, category_id)
-            items = list_items_in_category(session, category.name)
+            items = list_items_in_category(session, category_id)
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -166,7 +167,7 @@ def _render_detail(category_id: int) -> None:
         try:
             with session_scope() as session:
                 items_by_subcategory = {
-                    sub.name: list_items_in_category(session, category.name, sub.name)
+                    sub.name: list_items_in_category(session, sub.category_id)
                     for sub in subcategories
                 }
         except RuntimeError as exc:
@@ -183,7 +184,8 @@ def _render_item_list(items, show_subcategory: bool) -> None:
         st.caption("No items here yet.")
         return
     for item in items:
-        subcat = f" — {item.subcategory}" if show_subcategory and item.subcategory else ""
+        item_subcategory = subcategory_name(item.category)
+        subcat = f" — {item_subcategory}" if show_subcategory and item_subcategory else ""
         st.markdown(
             f'<a href="/items?item_id={item.item_id}" target="_self" '
             f'style="color: inherit; text-decoration: none;">'

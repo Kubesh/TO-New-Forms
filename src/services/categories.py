@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from src.models import Category, Item
 
@@ -39,22 +39,42 @@ def update_category(session: Session, category_id: int, **fields) -> Category | 
     return category
 
 
-def get_category_color_map(session: Session) -> dict[str, str]:
-    """Top-level category name -> color, for the card-indicator color used
-    everywhere categories are shown (Items, Inventory)."""
+def top_level_category_name(category: Category | None) -> str | None:
+    """The top-level category name for any Category row - itself if it's
+    already top-level, its parent's name if it's a subcategory."""
+    if category is None:
+        return None
+    return category.parent.name if category.parent_id else category.name
+
+
+def subcategory_name(category: Category | None) -> str | None:
+    """The subcategory name, or None if the row is a top-level category (or
+    there's no category at all) - matches the old items.subcategory column,
+    which was never set just because a top-level category was."""
+    if category is None or category.parent_id is None:
+        return None
+    return category.name
+
+
+def list_items_in_category(session: Session, category_id: int) -> list[Item]:
+    """Every item directly under category_id, or under any of its
+    subcategories if category_id is itself a top-level category."""
+    category = session.get(Category, category_id)
+    if category is None:
+        return []
+
+    if category.parent_id is None:
+        subcategory_ids = [
+            sub.category_id for sub in list_subcategories(session, category_id)
+        ]
+        category_ids = [category_id] + subcategory_ids
+    else:
+        category_ids = [category_id]
+
     stmt = (
-        select(Category.name, Category.color)
-        .where(Category.parent_id.is_(None))
-        .where(Category.color.isnot(None))
+        select(Item)
+        .where(Item.category_id.in_(category_ids))
+        .options(selectinload(Item.category))
+        .order_by(Item.category_id, Item.name)
     )
-    return dict(session.execute(stmt).all())
-
-
-def list_items_in_category(
-    session: Session, category_name: str, subcategory_name: str | None = None
-) -> list[Item]:
-    stmt = select(Item).where(Item.category == category_name)
-    if subcategory_name:
-        stmt = stmt.where(Item.subcategory == subcategory_name)
-    stmt = stmt.order_by(Item.subcategory, Item.name)
     return list(session.scalars(stmt).all())

@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from src.models import InventoryCount, InventoryCountItem, Item
+from src.models import Category, InventoryCount, InventoryCountItem, Item
 
 
 def _latest_count_subquery():
@@ -26,24 +26,25 @@ def _latest_count_subquery():
     return select(ranked.c.item_id, ranked.c.counted).where(ranked.c.rank == 1).subquery()
 
 
-def list_inventory(
-    session: Session,
-    query: str | None = None,
-    category: str | None = None,
-    subcategory: str | None = None,
-) -> list[tuple[Item, int | None]]:
+def list_inventory(session: Session, query: str | None = None) -> list[tuple[Item, int | None]]:
     """(item, current_on_hand) pairs - current_on_hand is None for an item
     that's never been counted."""
     latest = _latest_count_subquery()
-    stmt = select(Item, latest.c.counted).outerjoin(latest, latest.c.item_id == Item.item_id)
+    TopCategory = Category.__table__.alias("top_category")
+    stmt = (
+        select(Item, latest.c.counted)
+        .outerjoin(latest, latest.c.item_id == Item.item_id)
+        .outerjoin(Category, Item.category_id == Category.category_id)
+        .outerjoin(TopCategory, Category.parent_id == TopCategory.c.category_id)
+        .options(selectinload(Item.category).selectinload(Category.parent))
+    )
     if query:
         stmt = stmt.where(Item.name.ilike(f"%{query}%") | Item.sku.ilike(f"%{query}%"))
-    if category:
-        stmt = stmt.where(Item.category == category)
-    if subcategory:
-        stmt = stmt.where(Item.subcategory == subcategory)
     stmt = stmt.order_by(
-        Item.sellable.desc(), Item.category, Item.subcategory, Item.name
+        Item.sellable.desc(),
+        func.coalesce(TopCategory.c.name, Category.name),
+        Category.name,
+        Item.name,
     )
     return [tuple(row) for row in session.execute(stmt).all()]
 

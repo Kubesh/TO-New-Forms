@@ -1,11 +1,14 @@
 import html
 
 import streamlit as st
+from sqlalchemy.exc import IntegrityError
 
 from src.db import session_scope
 from src.pages_app.category_colors import category_color
-from src.services.categories import get_category_color_map
+from src.pages_app.items import category_subcategory_picker
+from src.services.categories import subcategory_name, top_level_category_name
 from src.services.inventory import create_inventory_count, list_inventory
+from src.services.items import create_item
 
 INVENTORY_TABLE_CSS = """
 <style>
@@ -92,7 +95,7 @@ def inventory_page() -> None:
 
     count_mode = st.session_state.get("inventory_count_mode", False)
 
-    col_search, col_toggle = st.columns([3, 1])
+    col_search, col_add, col_toggle = st.columns([2.4, 1, 1])
     with col_search:
         if count_mode:
             st.caption("Counting every item - use Cancel to go back to search/filter.")
@@ -103,6 +106,10 @@ def inventory_page() -> None:
                 placeholder="Search by name or SKU…",
                 label_visibility="collapsed",
             )
+    with col_add:
+        if not count_mode:
+            if st.button("+ Add Item", width="stretch", key="inv_add_item"):
+                add_item_dialog()
     with col_toggle:
         if not count_mode:
             if st.button("Count Mode", width="stretch", key="inv_enter_count_mode"):
@@ -112,7 +119,6 @@ def inventory_page() -> None:
     try:
         with session_scope() as session:
             rows = list_inventory(session, query=query)
-            color_map = get_category_color_map(session)
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -122,29 +128,29 @@ def inventory_page() -> None:
         return
 
     if count_mode:
-        _render_count_mode(rows, color_map)
+        _render_count_mode(rows)
     else:
-        _render_table(rows, color_map)
+        _render_table(rows)
 
 
-def _render_table(rows: list, color_map: dict[str, str]) -> None:
+def _render_table(rows: list) -> None:
     header_labels = ["Category", "Sub Category", "Item", "Current On Hand"]
     header = (
         '<div class="inv-table-header">'
         + "".join(f"<div>{label}</div>" for label in header_labels)
         + "</div>"
     )
-    rows_html = "".join(_row_html(item, on_hand, color_map) for item, on_hand in rows)
+    rows_html = "".join(_row_html(item, on_hand) for item, on_hand in rows)
     st.markdown(
         f'{INVENTORY_TABLE_CSS}{header}<div class="inv-card-list">{rows_html}</div>',
         unsafe_allow_html=True,
     )
 
 
-def _row_html(item, current_on_hand: int | None, color_map: dict[str, str]) -> str:
-    color = category_color(item.category, color_map)
-    category = html.escape(item.category or "—")
-    subcategory = html.escape(item.subcategory or "—")
+def _row_html(item, current_on_hand: int | None) -> str:
+    color = category_color(item.category)
+    category = html.escape(top_level_category_name(item.category) or "—")
+    subcategory = html.escape(subcategory_name(item.category) or "—")
     name = html.escape(item.name)
     on_hand = str(current_on_hand) if current_on_hand is not None else "—"
 
@@ -171,7 +177,7 @@ def _clear_count_mode_state(rows: list) -> None:
     st.session_state.pop("inv_confirmed_ids", None)
 
 
-def _render_count_mode(rows: list, color_map: dict[str, str]) -> None:
+def _render_count_mode(rows: list) -> None:
     confirmed_ids: set[int] = st.session_state.setdefault("inv_confirmed_ids", set())
 
     header_cols = st.columns([1.2, 1.2, 2, 1, 1, 1.4, 1])
@@ -201,7 +207,7 @@ def _render_count_mode(rows: list, color_map: dict[str, str]) -> None:
         row_keys_by_item[item.item_id] = (count_key, note_key)
         is_confirmed = item.item_id in confirmed_ids
 
-        category_border_keys[row_key] = category_color(item.category, color_map)
+        category_border_keys[row_key] = category_color(item.category)
 
         counted_value = st.session_state.get(count_key)
         if counted_value is not None:
@@ -212,9 +218,9 @@ def _render_count_mode(rows: list, color_map: dict[str, str]) -> None:
         with st.container(key=row_key):
             row_cols = st.columns([1.2, 1.2, 2, 1, 1, 1.4, 1])
             with row_cols[0]:
-                st.write(item.category or "—")
+                st.write(top_level_category_name(item.category) or "—")
             with row_cols[1]:
-                st.write(item.subcategory or "—")
+                st.write(subcategory_name(item.category) or "—")
             with row_cols[2]:
                 st.write(item.name)
             with row_cols[3]:
@@ -348,4 +354,87 @@ def _render_count_mode(rows: list, color_map: dict[str, str]) -> None:
         if st.button("Cancel", width="stretch", key="inv_count_cancel"):
             _clear_count_mode_state(rows)
             st.session_state["inventory_count_mode"] = False
+            st.rerun()
+
+
+@st.dialog("Add item", width="large")
+def add_item_dialog() -> None:
+    sku = st.text_input("SKU*", key="inv_item_add_sku")
+    name = st.text_input("Name*", key="inv_item_add_name")
+
+    with session_scope() as session:
+        category_id = category_subcategory_picker(session, None, "inv_item_add_")
+
+    col3, col4 = st.columns(2)
+    with col3:
+        unit_weight_lb = st.number_input(
+            "Unit weight (lb)",
+            value=0.0,
+            min_value=0.0,
+            step=0.01,
+            format="%.4f",
+            key="inv_item_add_unit_weight",
+        )
+    with col4:
+        sellable_content_weight_lb = st.number_input(
+            "Sellable content weight (lb)",
+            value=0.0,
+            min_value=0.0,
+            step=0.01,
+            format="%.4f",
+            key="inv_item_add_sellable_weight",
+        )
+
+    measured_in = st.selectbox(
+        "Measured in", ["Eaches", "Pounds"], index=0, key="inv_item_add_measured_in"
+    )
+
+    col5, col6 = st.columns(2)
+    with col5:
+        shopify_item_number = st.text_input("Shopify item #", key="inv_item_add_shopify_item")
+    with col6:
+        shopify_variant_number = st.text_input(
+            "Shopify variant #", key="inv_item_add_shopify_variant"
+        )
+
+    search_terms = st.text_area("Search terms", key="inv_item_add_search_terms")
+
+    col7, col8 = st.columns(2)
+    with col7:
+        sellable = st.checkbox("Sellable", value=True, key="inv_item_add_sellable")
+    with col8:
+        shipping_material = st.checkbox(
+            "Shipping material", value=False, key="inv_item_add_shipping"
+        )
+
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+        if st.button("Save", type="primary", width="stretch", key="inv_item_add_save"):
+            if not sku.strip():
+                st.error("SKU is required.")
+            elif not name.strip():
+                st.error("Name is required.")
+            else:
+                try:
+                    with session_scope() as session:
+                        create_item(
+                            session,
+                            sku.strip(),
+                            name.strip(),
+                            category_id=category_id,
+                            measured_in=measured_in,
+                            unit_weight_lb=unit_weight_lb or None,
+                            sellable_content_weight_lb=sellable_content_weight_lb or None,
+                            shopify_item_number=shopify_item_number.strip() or None,
+                            shopify_variant_number=shopify_variant_number.strip() or None,
+                            search_terms=search_terms.strip() or None,
+                            sellable=sellable,
+                            shipping_material=shipping_material,
+                        )
+                except IntegrityError:
+                    st.error(f"SKU \"{sku.strip()}\" is already in use by another item.")
+                else:
+                    st.rerun()
+    with col_cancel:
+        if st.button("Cancel", width="stretch", key="inv_item_add_cancel"):
             st.rerun()

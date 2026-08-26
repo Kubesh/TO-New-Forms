@@ -1,10 +1,13 @@
+from src.models import Category
+
 FALLBACK_COLOR = "rgba(128, 128, 128, 0.35)"
 
 
-def category_color(category: str | None, color_map: dict[str, str]) -> str:
-    """A category's card-indicator color, as set on its Category row -
-    falls back to a neutral gray for anything uncategorized, or any
-    category string that doesn't (yet) have a managed row/color."""
-    if not category:
+def category_color(category: Category | None) -> str:
+    """A category's card-indicator color - always the top-level ancestor's
+    color (subcategories don't carry their own), falling back to a neutral
+    gray for anything uncategorized or not yet given a color."""
+    if category is None:
         return FALLBACK_COLOR
-    return color_map.get(category, FALLBACK_COLOR)
+    top_level = category.parent if category.parent_id else category
+    return top_level.color or FALLBACK_COLOR

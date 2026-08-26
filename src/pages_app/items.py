@@ -4,16 +4,14 @@ import streamlit as st
 
 from src.db import session_scope
 from src.pages_app.category_colors import category_color
-from src.services.categories import get_category_color_map
-from src.services.inventory import get_last_count, list_counts_for_item
-from src.services.items import (
-    count_items,
-    get_item,
-    list_distinct_categories,
-    list_distinct_subcategories,
-    search_items,
-    update_item,
+from src.services.categories import (
+    list_subcategories,
+    list_top_level_categories,
+    subcategory_name,
+    top_level_category_name,
 )
+from src.services.inventory import get_last_count, list_counts_for_item
+from src.services.items import count_items, get_item, search_items, update_item
 
 PAGE_SIZE = 25
 
@@ -91,6 +89,53 @@ def _format_datetime(value) -> str:
     return value.strftime("%m/%d/%y %-I:%M %p") if value else "—"
 
 
+def category_subcategory_picker(session, current_category, key_prefix: str) -> int | None:
+    """Renders a top-level-category selectbox plus a subcategory selectbox
+    scoped to whichever top-level category is chosen, and returns the
+    category_id that should end up on the item (the subcategory's id if
+    one's picked, else the top-level category's id, else None)."""
+    top_level = list_top_level_categories(session)
+    top_options = ["No category"] + [c.name for c in top_level]
+    top_by_name = {c.name: c for c in top_level}
+
+    current_top = top_level_category_name(current_category)
+    current_sub = subcategory_name(current_category)
+    top_index = top_options.index(current_top) if current_top in top_options else 0
+
+    col1, col2 = st.columns(2)
+    with col1:
+        top_choice = st.selectbox(
+            "Category", top_options, index=top_index, key=f"{key_prefix}category"
+        )
+
+    if top_choice == "No category":
+        with col2:
+            st.selectbox(
+                "Subcategory", ["No subcategory"], disabled=True, key=f"{key_prefix}subcategory_none"
+            )
+        return None
+
+    chosen_top = top_by_name[top_choice]
+    subcategories = list_subcategories(session, chosen_top.category_id)
+    sub_options = ["No subcategory"] + [s.name for s in subcategories]
+    sub_by_name = {s.name: s for s in subcategories}
+    # Keying on the chosen top-level category means switching categories
+    # always resets to "No subcategory" instead of carrying over a value
+    # that may not exist in the new category's list.
+    sub_index = sub_options.index(current_sub) if current_sub in sub_options else 0
+    with col2:
+        sub_choice = st.selectbox(
+            "Subcategory",
+            sub_options,
+            index=sub_index,
+            key=f"{key_prefix}subcategory_{top_choice}",
+        )
+
+    if sub_choice != "No subcategory":
+        return sub_by_name[sub_choice].category_id
+    return chosen_top.category_id
+
+
 def items_page() -> None:
     item_id_param = st.query_params.get("item_id")
     if item_id_param:
@@ -110,8 +155,7 @@ def _render_list() -> None:
 
     try:
         with session_scope() as session:
-            categories = list_distinct_categories(session)
-            color_map = get_category_color_map(session)
+            top_level = list_top_level_categories(session)
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -124,21 +168,24 @@ def _render_list() -> None:
             label_visibility="collapsed",
         )
     with col_category:
-        category_choice = st.selectbox("Category", ["All categories"] + categories)
+        category_names = ["All categories"] + [c.name for c in top_level]
+        category_choice = st.selectbox("Category", category_names)
     with col_sellable:
         st.markdown("<div style='height: 1.85rem'></div>", unsafe_allow_html=True)
         sellable_only = st.checkbox("Sellable only")
 
-    category = None if category_choice == "All categories" else category_choice
+    top_by_name = {c.name: c for c in top_level}
+    chosen_top = top_by_name.get(category_choice)
     sellable = True if sellable_only else None
 
     # Subcategory only makes sense once a category is picked - without one,
     # subcategory names from unrelated categories would be mixed together.
-    subcategory = None
-    if category:
+    subcategory_choice = "All subcategories"
+    subcategories = []
+    if chosen_top:
         try:
             with session_scope() as session:
-                subcategories = list_distinct_subcategories(session, category=category)
+                subcategories = list_subcategories(session, chosen_top.category_id)
         except RuntimeError as exc:
             st.error(str(exc))
             return
@@ -150,12 +197,19 @@ def _render_list() -> None:
         # whose session-state value isn't in its current options).
         subcategory_choice = st.selectbox(
             "Subcategory",
-            ["All subcategories"] + subcategories,
+            ["All subcategories"] + [s.name for s in subcategories],
             key=f"items_subcategory_{category_choice}",
         )
-        subcategory = None if subcategory_choice == "All subcategories" else subcategory_choice
 
-    filters_key = (query, category, subcategory, sellable)
+    category_ids = None
+    if chosen_top:
+        if subcategory_choice != "All subcategories":
+            sub_by_name = {s.name: s for s in subcategories}
+            category_ids = [sub_by_name[subcategory_choice].category_id]
+        else:
+            category_ids = [chosen_top.category_id] + [s.category_id for s in subcategories]
+
+    filters_key = (query, tuple(category_ids) if category_ids else None, sellable)
     if st.session_state.get("item_filters_key") != filters_key:
         st.session_state["item_filters_key"] = filters_key
         st.session_state["item_page"] = 1
@@ -163,7 +217,7 @@ def _render_list() -> None:
 
     try:
         with session_scope() as session:
-            total = count_items(session, query, category, subcategory, sellable)
+            total = count_items(session, query, category_ids, sellable)
             total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
             page = min(max(page, 1), total_pages)
             st.session_state["item_page"] = page
@@ -172,8 +226,7 @@ def _render_list() -> None:
                 items = search_items(
                     session,
                     query,
-                    category,
-                    subcategory,
+                    category_ids,
                     sellable,
                     limit=PAGE_SIZE,
                     offset=(page - 1) * PAGE_SIZE,
@@ -188,7 +241,7 @@ def _render_list() -> None:
         st.info("No items found.")
         return
 
-    cards_html = "".join(_card_html(item, color_map) for item in items)
+    cards_html = "".join(_card_html(item) for item in items)
     st.markdown(
         f'{ITEM_CARD_CSS}<div class="item-card-list">{cards_html}</div>',
         unsafe_allow_html=True,
@@ -218,11 +271,13 @@ def _render_pagination(page: int, total_pages: int, total: int) -> None:
             st.rerun()
 
 
-def _card_html(item, color_map: dict[str, str]) -> str:
-    color = category_color(item.category, color_map)
+def _card_html(item) -> str:
+    color = category_color(item.category)
     name = html.escape(item.name)
     sku = html.escape(item.sku)
-    subcategory_bits = [b for b in [item.category, item.subcategory] if b]
+    subcategory_bits = [
+        b for b in [top_level_category_name(item.category), subcategory_name(item.category)] if b
+    ]
     subcategory_line = html.escape(" / ".join(subcategory_bits)) if subcategory_bits else ""
 
     tags = []
@@ -268,7 +323,9 @@ def _render_detail(item_id: int) -> None:
     st.caption(item.sku)
     st.header(item.name)
 
-    subcategory_bits = [b for b in [item.category, item.subcategory] if b]
+    subcategory_bits = [
+        b for b in [top_level_category_name(item.category), subcategory_name(item.category)] if b
+    ]
     st.write(" / ".join(subcategory_bits) if subcategory_bits else "No category")
 
     if not item.sellable:
@@ -345,15 +402,8 @@ def edit_item_dialog(item_id: int) -> None:
     st.caption(item.sku)
     name = st.text_input("Name*", value=item.name, key=f"{state_prefix}name")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        category = st.text_input(
-            "Category", value=item.category or "", key=f"{state_prefix}category"
-        )
-    with col2:
-        subcategory = st.text_input(
-            "Subcategory", value=item.subcategory or "", key=f"{state_prefix}subcategory"
-        )
+    with session_scope() as session:
+        category_id = category_subcategory_picker(session, item.category, state_prefix)
 
     col3, col4 = st.columns(2)
     with col3:
@@ -425,8 +475,7 @@ def edit_item_dialog(item_id: int) -> None:
                         session,
                         item_id,
                         name=name.strip(),
-                        category=category.strip() or None,
-                        subcategory=subcategory.strip() or None,
+                        category_id=category_id,
                         measured_in=measured_in.strip() or None,
                         unit_weight_lb=unit_weight_lb or None,
                         sellable_content_weight_lb=sellable_content_weight_lb or None,
