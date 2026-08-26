@@ -15,7 +15,10 @@ def _latest_count_subquery():
             func.row_number()
             .over(
                 partition_by=InventoryCountItem.item_id,
-                order_by=InventoryCountItem.created_at.desc(),
+                order_by=(
+                    InventoryCountItem.created_at.desc(),
+                    InventoryCountItem.inventory_count_item_id.desc(),
+                ),
             )
             .label("rank"),
         )
@@ -49,6 +52,31 @@ def get_current_on_hand(session: Session, item_id: int) -> int | None:
     latest = _latest_count_subquery()
     stmt = select(latest.c.counted).where(latest.c.item_id == item_id)
     return session.scalar(stmt)
+
+
+def get_last_count(session: Session, item_id: int) -> InventoryCountItem | None:
+    stmt = (
+        select(InventoryCountItem)
+        .where(InventoryCountItem.item_id == item_id)
+        .order_by(
+            InventoryCountItem.created_at.desc(),
+            InventoryCountItem.inventory_count_item_id.desc(),
+        )
+        .limit(1)
+    )
+    return session.scalars(stmt).first()
+
+
+def list_counts_for_item(session: Session, item_id: int) -> list[InventoryCountItem]:
+    stmt = (
+        select(InventoryCountItem)
+        .where(InventoryCountItem.item_id == item_id)
+        .order_by(
+            InventoryCountItem.created_at.desc(),
+            InventoryCountItem.inventory_count_item_id.desc(),
+        )
+    )
+    return list(session.scalars(stmt).all())
 
 
 def create_inventory_count(session: Session, counts: list[dict]) -> InventoryCount:

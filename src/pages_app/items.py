@@ -5,6 +5,7 @@ import streamlit as st
 from src.db import session_scope
 from src.pages_app.category_colors import category_color
 from src.services.categories import get_category_color_map
+from src.services.inventory import get_last_count, list_counts_for_item
 from src.services.items import (
     count_items,
     get_item,
@@ -80,6 +81,14 @@ ITEM_CARD_CSS = """
 }
 </style>
 """
+
+
+def _format_date(value) -> str:
+    return value.strftime("%m/%d/%y") if value else "—"
+
+
+def _format_datetime(value) -> str:
+    return value.strftime("%m/%d/%y %-I:%M %p") if value else "—"
 
 
 def items_page() -> None:
@@ -267,23 +276,59 @@ def _render_detail(item_id: int) -> None:
     if item.shipping_material:
         st.badge("Shipping material", color="blue")
 
-    st.subheader("Details")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"**Measured in:** {item.measured_in or '—'}")
-        st.write(
-            f"**Unit weight (lb):** "
-            f"{item.unit_weight_lb if item.unit_weight_lb is not None else '—'}"
-        )
-        st.write(
-            f"**Sellable content weight (lb):** "
-            f"{item.sellable_content_weight_lb if item.sellable_content_weight_lb is not None else '—'}"
-        )
-    with col2:
-        st.write(f"**Shopify item #:** {item.shopify_item_number or '—'}")
-        st.write(f"**Shopify variant #:** {item.shopify_variant_number or '—'}")
-    if item.search_terms:
-        st.write(f"**Search terms:** {item.search_terms}")
+    try:
+        with session_scope() as session:
+            last_count = get_last_count(session, item.item_id)
+            counts = list_counts_for_item(session, item.item_id)
+    except RuntimeError as exc:
+        st.error(str(exc))
+        return
+
+    tab_overview, tab_counts, tab_details = st.tabs(["Overview", "Counts", "Details"])
+
+    with tab_overview:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Current on hand", last_count.counted if last_count else "—")
+        with col2:
+            st.metric("Last count", _format_date(last_count.created_at) if last_count else "—")
+        with col3:
+            # Would need sales/shipment consumption tracked against
+            # inventory to compute this - not wired up yet, so this is a
+            # placeholder rather than a real (or worse, wrong) number.
+            st.metric("Used since last count", "—")
+            st.caption("Not tracked yet")
+
+    with tab_counts:
+        if not counts:
+            st.caption("No counts recorded yet.")
+        else:
+            for count in counts:
+                col_date, col_count, col_note = st.columns([1.5, 1, 3])
+                with col_date:
+                    st.write(_format_datetime(count.created_at))
+                with col_count:
+                    st.write(str(count.counted))
+                with col_note:
+                    st.write(count.notes or "—")
+
+    with tab_details:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**Measured in:** {item.measured_in or '—'}")
+            st.write(
+                f"**Unit weight (lb):** "
+                f"{item.unit_weight_lb if item.unit_weight_lb is not None else '—'}"
+            )
+            st.write(
+                f"**Sellable content weight (lb):** "
+                f"{item.sellable_content_weight_lb if item.sellable_content_weight_lb is not None else '—'}"
+            )
+        with col2:
+            st.write(f"**Shopify item #:** {item.shopify_item_number or '—'}")
+            st.write(f"**Shopify variant #:** {item.shopify_variant_number or '—'}")
+        if item.search_terms:
+            st.write(f"**Search terms:** {item.search_terms}")
 
 
 @st.dialog("Edit item", width="large")
