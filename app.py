@@ -3,6 +3,7 @@ from pathlib import Path
 import streamlit as st
 
 from src.pages_app.customers import customers_page
+from src.pages_app.inventory import inventory_page
 from src.pages_app.items import items_page
 from src.pages_app.purchase_orders import purchase_orders_page
 
@@ -197,13 +198,19 @@ customers = st.Page(customers_page, title="Customers", url_path="customers", def
 purchase_orders = st.Page(
     purchase_orders_page, title="Purchase Orders", url_path="purchase-orders"
 )
+inventory = st.Page(inventory_page, title="Inventory", url_path="inventory")
 items = st.Page(items_page, title="Items", url_path="items")
 
 # Build the nav ourselves (position="hidden") so the sidebar always renders,
 # rather than relying on Streamlit's auto nav widget, which hides itself
 # whenever there's only a single page.
 pg = st.navigation(
-    {"Customers": [customers], "Purchase Orders": [purchase_orders], "Items": [items]},
+    {
+        "Customers": [customers],
+        "Purchase Orders": [purchase_orders],
+        "Inventory": [inventory],
+        "Items": [items],
+    },
     position="hidden",
 )
 
@@ -223,6 +230,7 @@ with st.sidebar:
     )
     st.page_link(customers, label="Customers")
     st.page_link(purchase_orders, label="Purchase Orders")
+    st.page_link(inventory, label="Inventory")
     st.page_link(items, label="Items")
 
     # Streamlit's page navigation is a client-side transition, not a full

@@ -4,6 +4,21 @@ from sqlalchemy.orm import Session
 from src.models import Item
 
 
+def get_item(session: Session, item_id: int) -> Item | None:
+    return session.get(Item, item_id)
+
+
+def update_item(session: Session, item_id: int, **fields) -> Item | None:
+    item = session.get(Item, item_id)
+    if item is None:
+        return None
+    for key, value in fields.items():
+        setattr(item, key, value)
+    session.commit()
+    session.refresh(item)
+    return item
+
+
 def list_sellable_item_choices(
     session: Session, exclude_item_ids=None
 ) -> list[tuple[int, str, str, str | None]]:

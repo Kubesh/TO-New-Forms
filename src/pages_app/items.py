@@ -5,9 +5,11 @@ import streamlit as st
 from src.db import session_scope
 from src.services.items import (
     count_items,
+    get_item,
     list_distinct_categories,
     list_distinct_subcategories,
     search_items,
+    update_item,
 )
 
 PAGE_SIZE = 25
@@ -27,6 +29,16 @@ CATEGORY_PALETTE = [
 
 ITEM_CARD_CSS = """
 <style>
+.item-card-link,
+.item-card-link:visited,
+.item-card-link:hover,
+.item-card-link * {
+    color: inherit !important;
+    text-decoration: none !important;
+}
+.item-card-link {
+    display: block;
+}
 .item-card-list {
     padding-top: 0.75rem;
 }
@@ -88,6 +100,20 @@ def _category_color(category: str | None, sorted_categories: list[str]) -> str:
 
 
 def items_page() -> None:
+    item_id_param = st.query_params.get("item_id")
+    if item_id_param:
+        try:
+            item_id = int(item_id_param)
+        except ValueError:
+            item_id = None
+        if item_id is not None:
+            _render_detail(item_id)
+            return
+
+    _render_list()
+
+
+def _render_list() -> None:
     st.title("Items")
 
     try:
@@ -214,6 +240,7 @@ def _card_html(item, sorted_categories: list[str]) -> str:
         tags.append('<span class="item-card-tag item-card-tag-material">Shipping material</span>')
 
     parts = [
+        f'<a class="item-card-link" href="?item_id={item.item_id}" target="_self">',
         f'<div class="item-card" style="--item-cat-color: {color};">',
         f'<div class="item-card-sku">{sku}</div>',
         f'<div class="item-card-name">{name}</div>',
@@ -222,5 +249,161 @@ def _card_html(item, sorted_categories: list[str]) -> str:
         parts.append(f'<div class="item-card-sub">{subcategory_line}</div>')
     if tags:
         parts.append(f'<div class="item-card-tags">{"".join(tags)}</div>')
-    parts.append("</div>")
+    parts.append("</div></a>")
     return "".join(parts)
+
+
+def _render_detail(item_id: int) -> None:
+    with session_scope() as session:
+        item = get_item(session, item_id)
+
+    if not item:
+        st.warning("Item not found.")
+        if st.button("← Back to list"):
+            st.query_params.clear()
+            st.rerun()
+        return
+
+    col_back, col_edit = st.columns([3, 1])
+    with col_back:
+        if st.button("← Back to list"):
+            st.query_params.clear()
+            st.rerun()
+    with col_edit:
+        if st.button("Edit item", width="stretch"):
+            edit_item_dialog(item.item_id)
+
+    st.caption(item.sku)
+    st.header(item.name)
+
+    subcategory_bits = [b for b in [item.category, item.subcategory] if b]
+    st.write(" / ".join(subcategory_bits) if subcategory_bits else "No category")
+
+    if not item.sellable:
+        st.badge("Not sellable", color="red")
+    if item.shipping_material:
+        st.badge("Shipping material", color="blue")
+
+    st.subheader("Details")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Measured in:** {item.measured_in or '—'}")
+        st.write(
+            f"**Unit weight (lb):** "
+            f"{item.unit_weight_lb if item.unit_weight_lb is not None else '—'}"
+        )
+        st.write(
+            f"**Sellable content weight (lb):** "
+            f"{item.sellable_content_weight_lb if item.sellable_content_weight_lb is not None else '—'}"
+        )
+    with col2:
+        st.write(f"**Shopify item #:** {item.shopify_item_number or '—'}")
+        st.write(f"**Shopify variant #:** {item.shopify_variant_number or '—'}")
+    if item.search_terms:
+        st.write(f"**Search terms:** {item.search_terms}")
+
+
+@st.dialog("Edit item", width="large")
+def edit_item_dialog(item_id: int) -> None:
+    with session_scope() as session:
+        item = get_item(session, item_id)
+
+    if not item:
+        st.error("Item not found.")
+        return
+
+    state_prefix = f"item_edit_{item_id}_"
+
+    st.caption(item.sku)
+    name = st.text_input("Name*", value=item.name, key=f"{state_prefix}name")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        category = st.text_input(
+            "Category", value=item.category or "", key=f"{state_prefix}category"
+        )
+    with col2:
+        subcategory = st.text_input(
+            "Subcategory", value=item.subcategory or "", key=f"{state_prefix}subcategory"
+        )
+
+    col3, col4 = st.columns(2)
+    with col3:
+        unit_weight_lb = st.number_input(
+            "Unit weight (lb)",
+            value=float(item.unit_weight_lb) if item.unit_weight_lb is not None else 0.0,
+            min_value=0.0,
+            step=0.01,
+            format="%.4f",
+            key=f"{state_prefix}unit_weight",
+        )
+    with col4:
+        sellable_content_weight_lb = st.number_input(
+            "Sellable content weight (lb)",
+            value=(
+                float(item.sellable_content_weight_lb)
+                if item.sellable_content_weight_lb is not None
+                else 0.0
+            ),
+            min_value=0.0,
+            step=0.01,
+            format="%.4f",
+            key=f"{state_prefix}sellable_weight",
+        )
+
+    measured_in = st.text_input(
+        "Measured in", value=item.measured_in or "", key=f"{state_prefix}measured_in"
+    )
+
+    col5, col6 = st.columns(2)
+    with col5:
+        shopify_item_number = st.text_input(
+            "Shopify item #",
+            value=item.shopify_item_number or "",
+            key=f"{state_prefix}shopify_item",
+        )
+    with col6:
+        shopify_variant_number = st.text_input(
+            "Shopify variant #",
+            value=item.shopify_variant_number or "",
+            key=f"{state_prefix}shopify_variant",
+        )
+
+    search_terms = st.text_area(
+        "Search terms", value=item.search_terms or "", key=f"{state_prefix}search_terms"
+    )
+
+    col7, col8 = st.columns(2)
+    with col7:
+        sellable = st.checkbox("Sellable", value=item.sellable, key=f"{state_prefix}sellable")
+    with col8:
+        shipping_material = st.checkbox(
+            "Shipping material", value=item.shipping_material, key=f"{state_prefix}shipping"
+        )
+
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+        if st.button("Save", type="primary", width="stretch", key=f"{state_prefix}save"):
+            if not name.strip():
+                st.error("Name is required.")
+            else:
+                with session_scope() as session:
+                    update_item(
+                        session,
+                        item_id,
+                        name=name.strip(),
+                        category=category.strip() or None,
+                        subcategory=subcategory.strip() or None,
+                        measured_in=measured_in.strip() or None,
+                        unit_weight_lb=unit_weight_lb or None,
+                        sellable_content_weight_lb=sellable_content_weight_lb or None,
+                        shopify_item_number=shopify_item_number.strip() or None,
+                        shopify_variant_number=shopify_variant_number.strip() or None,
+                        search_terms=search_terms.strip() or None,
+                        sellable=sellable,
+                        shipping_material=shipping_material,
+                    )
+                st.rerun()
+    with col_cancel:
+        if st.button("Cancel", width="stretch", key=f"{state_prefix}cancel"):
+            st.rerun()

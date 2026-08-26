@@ -166,3 +166,38 @@ class OrderShippingMaterial(Base, TimestampMixin):
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="shipping_materials")
     item: Mapped["Item"] = relationship()
+
+
+class InventoryCount(Base, TimestampMixin):
+    """A single physical-count session. Deliberately minimal beyond the
+    timestamps - kept separate from InventoryCountItem so more fields
+    (who ran it, a location, a status) can be added later without
+    touching the per-item rows."""
+
+    __tablename__ = "inventory_counts"
+
+    inventory_count_id: Mapped[int] = mapped_column(primary_key=True)
+
+    items: Mapped[list["InventoryCountItem"]] = relationship(
+        back_populates="inventory_count", cascade="all, delete-orphan"
+    )
+
+
+class InventoryCountItem(Base, TimestampMixin):
+    """One item's counted quantity within an InventoryCount session. An
+    item's "current on hand" is derived as whichever of these is most
+    recent for that item, rather than a separate mutable total - so this
+    table is the single source of truth, never out of sync with itself."""
+
+    __tablename__ = "inventory_count_items"
+
+    inventory_count_item_id: Mapped[int] = mapped_column(primary_key=True)
+    inventory_count_id: Mapped[int] = mapped_column(
+        ForeignKey("inventory_counts.inventory_count_id"), nullable=False
+    )
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.item_id"), nullable=False)
+    counted: Mapped[int] = mapped_column(Integer, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    inventory_count: Mapped["InventoryCount"] = relationship(back_populates="items")
+    item: Mapped["Item"] = relationship()
