@@ -224,33 +224,53 @@ class InventoryCountItem(Base, TimestampMixin):
 
 
 class Assembly(Base, TimestampMixin):
-    """A recipe that converts some items into others in a batch - e.g.
+    """A named recipe that converts some items into others in a batch - e.g.
     breaking bulk soil down into bagged units, or combining components into
     a kit. The actual item-level effects (what's consumed, what's produced)
-    live in AssemblyItem, not here."""
+    live on its versions, not here - an assembly can be revised over time
+    (a new version_name) without losing the history of earlier ones."""
 
     __tablename__ = "assemblies"
 
     assembly_id: Mapped[int] = mapped_column(primary_key=True)
     assembly_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    version_name: Mapped[str | None] = mapped_column(String(100))
     notes: Mapped[str | None] = mapped_column(Text)
 
-    items: Mapped[list["AssemblyItem"]] = relationship(
+    versions: Mapped[list["AssemblyVersion"]] = relationship(
         back_populates="assembly", cascade="all, delete-orphan"
     )
 
 
-class AssemblyItem(Base, TimestampMixin):
-    """One product's role in an assembly - amount is negative for a product
-    consumed by the assembly, positive for a product it produces."""
+class AssemblyVersion(Base, TimestampMixin):
+    """One revision of an assembly's recipe - its own notes plus the set of
+    items it consumes/produces (AssemblyVersionItem), independent of any
+    other version under the same assembly."""
 
-    __tablename__ = "assembly_items"
+    __tablename__ = "assembly_versions"
 
-    assembly_item_id: Mapped[int] = mapped_column(primary_key=True)
+    assembly_version_id: Mapped[int] = mapped_column(primary_key=True)
     assembly_id: Mapped[int] = mapped_column(ForeignKey("assemblies.assembly_id"), nullable=False)
+    version_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    assembly: Mapped["Assembly"] = relationship(back_populates="versions")
+    items: Mapped[list["AssemblyVersionItem"]] = relationship(
+        back_populates="assembly_version", cascade="all, delete-orphan"
+    )
+
+
+class AssemblyVersionItem(Base, TimestampMixin):
+    """One product's role in an assembly version - amount is negative for a
+    product consumed by it, positive for a product it produces."""
+
+    __tablename__ = "assembly_version_items"
+
+    assembly_version_item_id: Mapped[int] = mapped_column(primary_key=True)
+    assembly_version_id: Mapped[int] = mapped_column(
+        ForeignKey("assembly_versions.assembly_version_id"), nullable=False
+    )
     product_id: Mapped[int] = mapped_column(ForeignKey("items.item_id"), nullable=False)
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    assembly: Mapped["Assembly"] = relationship(back_populates="items")
+    assembly_version: Mapped["AssemblyVersion"] = relationship(back_populates="items")
     product: Mapped["Item"] = relationship()

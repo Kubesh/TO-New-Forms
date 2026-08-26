@@ -1,13 +1,14 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from src.models import Assembly, AssemblyItem
+from src.models import Assembly, AssemblyVersion, AssemblyVersionItem
 
 
 def list_assemblies(session: Session, query: str | None = None) -> list[Assembly]:
-    # Eager-load items so the list page's item-count display doesn't lazy
-    # load after the session (and thus session_scope's connection) closes.
-    stmt = select(Assembly).options(selectinload(Assembly.items))
+    # Eager-load versions so the list page's version-count display doesn't
+    # lazy load after the session (and thus session_scope's connection)
+    # closes.
+    stmt = select(Assembly).options(selectinload(Assembly.versions))
     if query:
         stmt = stmt.where(Assembly.assembly_name.ilike(f"%{query}%"))
     stmt = stmt.order_by(Assembly.assembly_name)
@@ -18,18 +19,13 @@ def get_assembly(session: Session, assembly_id: int) -> Assembly | None:
     stmt = (
         select(Assembly)
         .where(Assembly.assembly_id == assembly_id)
-        .options(selectinload(Assembly.items).selectinload(AssemblyItem.product))
+        .options(selectinload(Assembly.versions).selectinload(AssemblyVersion.items))
     )
     return session.scalars(stmt).first()
 
 
-def create_assembly(
-    session: Session,
-    assembly_name: str,
-    version_name: str | None = None,
-    notes: str | None = None,
-) -> Assembly:
-    assembly = Assembly(assembly_name=assembly_name, version_name=version_name, notes=notes)
+def create_assembly(session: Session, assembly_name: str, notes: str | None = None) -> Assembly:
+    assembly = Assembly(assembly_name=assembly_name, notes=notes)
     session.add(assembly)
     session.commit()
     session.refresh(assembly)
@@ -47,33 +43,70 @@ def update_assembly(session: Session, assembly_id: int, **fields) -> Assembly | 
     return assembly
 
 
-def get_assembly_item(session: Session, assembly_item_id: int) -> AssemblyItem | None:
-    return session.get(AssemblyItem, assembly_item_id)
+def get_version(session: Session, assembly_version_id: int) -> AssemblyVersion | None:
+    stmt = (
+        select(AssemblyVersion)
+        .where(AssemblyVersion.assembly_version_id == assembly_version_id)
+        .options(
+            selectinload(AssemblyVersion.assembly),
+            selectinload(AssemblyVersion.items).selectinload(AssemblyVersionItem.product),
+        )
+    )
+    return session.scalars(stmt).first()
 
 
-def add_assembly_item(
-    session: Session, assembly_id: int, product_id: int, amount: int
-) -> AssemblyItem:
-    assembly_item = AssemblyItem(assembly_id=assembly_id, product_id=product_id, amount=amount)
-    session.add(assembly_item)
+def create_version(
+    session: Session, assembly_id: int, version_name: str, notes: str | None = None
+) -> AssemblyVersion:
+    version = AssemblyVersion(assembly_id=assembly_id, version_name=version_name, notes=notes)
+    session.add(version)
     session.commit()
-    session.refresh(assembly_item)
-    return assembly_item
+    session.refresh(version)
+    return version
 
 
-def update_assembly_item(session: Session, assembly_item_id: int, **fields) -> AssemblyItem | None:
-    assembly_item = session.get(AssemblyItem, assembly_item_id)
-    if assembly_item is None:
+def update_version(session: Session, assembly_version_id: int, **fields) -> AssemblyVersion | None:
+    version = session.get(AssemblyVersion, assembly_version_id)
+    if version is None:
         return None
     for key, value in fields.items():
-        setattr(assembly_item, key, value)
+        setattr(version, key, value)
     session.commit()
-    session.refresh(assembly_item)
-    return assembly_item
+    session.refresh(version)
+    return version
 
 
-def delete_assembly_item(session: Session, assembly_item_id: int) -> None:
-    assembly_item = session.get(AssemblyItem, assembly_item_id)
-    if assembly_item is not None:
-        session.delete(assembly_item)
+def get_version_item(session: Session, assembly_version_item_id: int) -> AssemblyVersionItem | None:
+    return session.get(AssemblyVersionItem, assembly_version_item_id)
+
+
+def add_version_item(
+    session: Session, assembly_version_id: int, product_id: int, amount: int
+) -> AssemblyVersionItem:
+    version_item = AssemblyVersionItem(
+        assembly_version_id=assembly_version_id, product_id=product_id, amount=amount
+    )
+    session.add(version_item)
+    session.commit()
+    session.refresh(version_item)
+    return version_item
+
+
+def update_version_item(
+    session: Session, assembly_version_item_id: int, **fields
+) -> AssemblyVersionItem | None:
+    version_item = session.get(AssemblyVersionItem, assembly_version_item_id)
+    if version_item is None:
+        return None
+    for key, value in fields.items():
+        setattr(version_item, key, value)
+    session.commit()
+    session.refresh(version_item)
+    return version_item
+
+
+def delete_version_item(session: Session, assembly_version_item_id: int) -> None:
+    version_item = session.get(AssemblyVersionItem, assembly_version_item_id)
+    if version_item is not None:
+        session.delete(version_item)
         session.commit()
