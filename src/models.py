@@ -121,7 +121,10 @@ class PurchaseOrder(Base, TimestampMixin):
     order_type: Mapped[str | None] = mapped_column(String(50))
     order_date: Mapped[date | None] = mapped_column()
     due_date: Mapped[date | None] = mapped_column()
-    ship_date: Mapped[date | None] = mapped_column()
+    requested_ship_date: Mapped[date | None] = mapped_column()
+    # A timestamp (not just a date) so "Ship PO" can record the actual
+    # moment it was marked shipped, not just the day.
+    ship_date: Mapped[datetime | None] = mapped_column()
     order_entry_timestamp: Mapped[datetime | None] = mapped_column()
     note: Mapped[str | None] = mapped_column(Text)
     voided: Mapped[bool] = mapped_column(default=False, server_default="false")

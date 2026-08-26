@@ -1,5 +1,5 @@
 import html
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import streamlit as st
@@ -16,6 +16,7 @@ from src.services.purchase_orders import (
     get_po_line_item_stats,
     get_purchase_order,
     search_purchase_orders,
+    ship_purchase_order,
     update_line_item_quantities,
     update_purchase_order,
 )
@@ -166,6 +167,10 @@ def _order_type_badge_html(order_type: str | None) -> str:
 
 def _format_date(value) -> str:
     return value.strftime("%m/%d/%y") if value else "—"
+
+
+def _format_datetime(value) -> str:
+    return value.strftime("%m/%d/%y %-I:%M %p") if value else "—"
 
 
 DATE_INPUT_FORMAT = "MM/DD/YYYY"  # Streamlit's date_input only supports 4-digit years
@@ -389,7 +394,15 @@ def _render_detail(po_id: int) -> None:
     with col2:
         st.write(f"**Due date:** {_format_date(po.due_date)}")
     with col3:
-        st.write(f"**Ship date:** {_format_date(po.ship_date)}")
+        st.write(f"**Requested ship date:** {_format_date(po.requested_ship_date)}")
+
+    col_ship_date, col_ship_btn = st.columns([3, 1])
+    with col_ship_date:
+        st.write(f"**Ship date:** {_format_datetime(po.ship_date)}")
+    with col_ship_btn:
+        if po.ship_date is None:
+            if st.button("Ship PO", width="stretch", key="ship_po_btn"):
+                ship_po_confirm_dialog(po.po_id, po.po_number)
 
     if po.note:
         st.write(f"**Note:** {po.note}")
@@ -445,6 +458,23 @@ def delete_po_confirm_dialog(po_id: int, po_number: str) -> None:
                 st.error("Couldn't delete this PO - make sure it's voided and hasn't shipped.")
     with col_cancel:
         if st.button("Cancel", width="stretch", key=f"po_delete_{po_id}_cancel"):
+            st.rerun()
+
+
+@st.dialog("Ship purchase order", width="small")
+def ship_po_confirm_dialog(po_id: int, po_number: str) -> None:
+    st.write(f"Mark PO {po_number} as shipped?")
+    col_yes, col_no = st.columns(2)
+    with col_yes:
+        if st.button("Yes", type="primary", width="stretch", key=f"po_ship_{po_id}_yes"):
+            with session_scope() as session:
+                shipped = ship_purchase_order(session, po_id)
+            if shipped is None:
+                st.error("Couldn't mark this PO as shipped - it may already have a ship date.")
+            else:
+                st.rerun()
+    with col_no:
+        if st.button("No", width="stretch", key=f"po_ship_{po_id}_no"):
             st.rerun()
 
 
@@ -530,8 +560,8 @@ def edit_po_dialog(po_id: int) -> None:
     has_shipped = po.ship_date is not None
     if has_shipped:
         st.warning(
-            f"This PO shipped on {_format_date(po.ship_date)}. Editing a shipped order won't "
-            "change what was actually sent - make sure that's really what you want."
+            f"This PO shipped on {_format_datetime(po.ship_date)}. Editing a shipped order "
+            "won't change what was actually sent - make sure that's really what you want."
         )
         acknowledged = st.checkbox(
             "I understand this PO has already shipped and want to edit it anyway",
@@ -551,7 +581,7 @@ def edit_po_dialog(po_id: int) -> None:
         key=f"{state_prefix}type",
     )
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         order_date = st.date_input(
             "Order date",
@@ -569,9 +599,23 @@ def edit_po_dialog(po_id: int) -> None:
             key=f"{state_prefix}due_date",
         )
     with col3:
-        ship_date = st.date_input(
+        requested_ship_date = st.date_input(
+            "Requested ship date",
+            value=po.requested_ship_date,
+            disabled=locked,
+            format=DATE_INPUT_FORMAT,
+            key=f"{state_prefix}requested_ship_date",
+        )
+    with col4:
+        # ship_date is a timestamp (set precisely by "Ship PO"), but this
+        # widget can only edit the date part - saving combines whatever
+        # date is picked here with midnight, since there's no time-of-day
+        # control. Manually editing an already-set ship date should be
+        # rare; "Ship PO" is the normal path and it does capture the
+        # actual time.
+        ship_date_only = st.date_input(
             "Ship date",
-            value=po.ship_date,
+            value=po.ship_date.date() if po.ship_date else None,
             disabled=locked,
             format=DATE_INPUT_FORMAT,
             key=f"{state_prefix}ship_date",
@@ -648,6 +692,16 @@ def edit_po_dialog(po_id: int) -> None:
         if st.button(
             "Save", type="primary", disabled=locked, width="stretch", key=f"{state_prefix}save"
         ):
+            if ship_date_only is None:
+                new_ship_date = None
+            elif po.ship_date is not None and ship_date_only == po.ship_date.date():
+                # Date wasn't actually changed - keep the original time
+                # rather than silently collapsing it to midnight just
+                # because the form was saved.
+                new_ship_date = po.ship_date
+            else:
+                new_ship_date = datetime.combine(ship_date_only, datetime.min.time())
+
             with session_scope() as session:
                 update_purchase_order(
                     session,
@@ -655,7 +709,8 @@ def edit_po_dialog(po_id: int) -> None:
                     order_type=order_type_choice,
                     order_date=order_date,
                     due_date=due_date,
-                    ship_date=ship_date,
+                    requested_ship_date=requested_ship_date,
+                    ship_date=new_ship_date,
                     voided=voided,
                     note=note.strip() or None,
                 )
@@ -717,8 +772,14 @@ def create_po_dialog(customer_id: int) -> None:
             key=f"{state_prefix}due_date",
         )
     with col3:
-        ship_date = st.date_input(
-            "Ship date", value=None, format=DATE_INPUT_FORMAT, key=f"{state_prefix}ship_date"
+        # Ship date itself is deliberately not offered here - it's set via
+        # the "Ship PO" action once the order actually ships, not guessed
+        # at creation time.
+        requested_ship_date = st.date_input(
+            "Requested ship date",
+            value=None,
+            format=DATE_INPUT_FORMAT,
+            key=f"{state_prefix}requested_ship_date",
         )
 
     note = st.text_area("Note", value="", key=f"{state_prefix}note")
@@ -746,7 +807,7 @@ def create_po_dialog(customer_id: int) -> None:
                             order_type=order_type_choice,
                             order_date=order_date,
                             due_date=due_date,
-                            ship_date=ship_date,
+                            requested_ship_date=requested_ship_date,
                             note=note.strip() or None,
                             voided=False,
                         )

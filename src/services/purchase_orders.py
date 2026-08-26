@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -99,6 +101,19 @@ def get_non_voided_po_counts(session: Session, customer_ids) -> dict[int, int]:
 def create_purchase_order(session: Session, **fields) -> PurchaseOrder:
     po = PurchaseOrder(**fields)
     session.add(po)
+    session.commit()
+    session.refresh(po)
+    return po
+
+
+def ship_purchase_order(session: Session, po_id: int) -> PurchaseOrder | None:
+    """Marks a PO as shipped right now. Returns None (no-op) if the PO
+    doesn't exist or has already shipped, so this is safe to call even if
+    two people click "Ship PO" at nearly the same time."""
+    po = session.get(PurchaseOrder, po_id)
+    if po is None or po.ship_date is not None:
+        return None
+    po.ship_date = datetime.now()
     session.commit()
     session.refresh(po)
     return po
