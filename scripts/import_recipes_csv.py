@@ -1,35 +1,41 @@
 """Import a recipe/BOM export into assemblies.
 
-Usage:
-    python scripts/import_recipes_csv.py path/to/Recipes.csv [--version-name "Current"]
-        [--created-at 2026-01-15] [--dry-run]
+Handles two CSV shapes, auto-detected from the header row:
 
-Expects columns: Product SKU, Ingredient Number, Amount, Percentage Of Total
-(Amount is a "26.20%"-style string - the "%" is stripped and the number is
-kept as-is, it isn't re-normalized to sum to 100).
+1. A snapshot export (columns: Product SKU, Ingredient Number, Amount,
+   Percentage Of Total) - one row per ingredient in the CURRENT recipe.
+   Usage:
+       python scripts/import_recipes_csv.py Recipes.csv [--version-name "Current"]
+           [--created-at 2026-01-15] [--dry-run]
 
-For each distinct Product SKU:
-  - Creates an item for the product itself (sku = Product SKU) and for each
-    ingredient (sku = Ingredient Number) if one doesn't already exist -
-    true insert-ignore: an item that already exists is left untouched, not
-    updated. Newly-created items get a placeholder name equal to their SKU
-    (there's no descriptive name in this export) - rename them from the
-    Items page afterward.
-  - Creates one Assembly named after the Product SKU if one doesn't already
-    exist.
-  - Creates one AssemblyVersion under it (named --version-name, "Current"
-    by default) with one AssemblyVersionItem per ingredient row (amount
-    negated - consumed) plus one for the product itself (amount = the sum
-    of that assembly's ingredient amounts - produced). Skipped if a
-    version with that name already exists under the assembly, so this is
-    safe to re-run.
+2. A change-log export (columns: Change Date, Recipe SKU, Base or
+   Adjustment Or Future Adjustment, Ingredient SKU, Percent of Recipe,
+   Reason for Change) - a full history of every recipe revision.
+   Usage:
+       python scripts/import_recipes_csv.py ChangeLog.csv [--dry-run]
+   Every (Recipe SKU, Change Date, label) group becomes its own
+   AssemblyVersion, named "{label} ({date})" and dated to Change Date, with
+   Reason for Change carried over as the version's notes. Groups are
+   imported exactly as given, including "Base" groups that just restate an
+   earlier "Adjustment" - they don't always match exactly (an undocumented
+   change can sit between two logged ones), so this doesn't try to dedupe
+   them; a faithful copy of the log is safer than a clever-but-wrong guess.
+   --version-name/--created-at don't apply to this shape (each version's
+   name and date come from its own row) and are rejected if passed.
 
---created-at lets you backdate a historical version's created_at (and its
-line items') to when that recipe was actually in effect, e.g. when loading
-a past version from an archived export rather than the current one.
+Both shapes: Amount/Percent values are "26.20%"-style strings - the "%" is
+stripped and the number kept as-is, never re-normalized to sum to 100. For
+each distinct product/recipe SKU, creates an item for the product itself
+and for each ingredient if one doesn't already exist - true insert-ignore,
+an item that already exists is left untouched, not updated. Newly-created
+items get a placeholder name equal to their SKU (neither export gives a
+descriptive name) - rename them from the Items page afterward. Each
+version gets one AssemblyVersionItem per ingredient row (amount negated -
+consumed) plus one for the product itself (amount = the sum of that
+version's ingredient amounts - produced).
 
 Safe to re-run: items are insert-ignore, assemblies/versions are skipped
-if they already exist by name.
+if they already exist by name under that assembly.
 """
 import argparse
 import csv
@@ -46,6 +52,9 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from src.db import normalize_database_url  # noqa: E402
 from src.models import Assembly, AssemblyVersion, AssemblyVersionItem, Item  # noqa: E402
+
+SNAPSHOT_COLUMNS = {"Product SKU", "Ingredient Number", "Amount"}
+CHANGELOG_COLUMNS = {"Change Date", "Recipe SKU", "Ingredient SKU", "Percent of Recipe"}
 
 
 def get_session():
@@ -72,29 +81,224 @@ def load_rows(csv_path: str) -> list[dict]:
         return list(csv.DictReader(f))
 
 
-def group_by_product(rows: list[dict]) -> dict[str, list[dict]]:
+def detect_format(fieldnames: list[str]) -> str:
+    fields = set(fieldnames or [])
+    if SNAPSHOT_COLUMNS.issubset(fields):
+        return "snapshot"
+    if CHANGELOG_COLUMNS.issubset(fields):
+        return "changelog"
+    raise ValueError(
+        f"Unrecognized CSV columns: {fieldnames}\n"
+        f"Expected either {sorted(SNAPSHOT_COLUMNS)} (snapshot) "
+        f"or {sorted(CHANGELOG_COLUMNS)} (change log)."
+    )
+
+
+class Counters:
+    def __init__(self):
+        self.items_created = 0
+        self.assemblies_created = 0
+        self.assemblies_skipped = 0
+        self.versions_created = 0
+        self.versions_skipped = 0
+        self.line_items_created = 0
+
+    def report(self, version_label: str = "versions") -> None:
+        print(f"Items created: {self.items_created}")
+        print(f"Assemblies created: {self.assemblies_created}")
+        print(f"Assemblies already existing (reused): {self.assemblies_skipped}")
+        print(f"{version_label} created: {self.versions_created}")
+        print(f"{version_label} already existing (skipped): {self.versions_skipped}")
+        print(f"Assembly version line items created: {self.line_items_created}")
+
+
+def get_or_create_item(session, cache: dict, sku: str, counters: Counters) -> Item:
+    """Insert-ignore: an item that already exists is returned as-is, never
+    modified."""
+    if sku in cache:
+        return cache[sku]
+    item = session.scalars(select(Item).where(Item.sku == sku)).first()
+    if item is None:
+        item = Item(sku=sku, name=sku)
+        session.add(item)
+        session.flush()
+        counters.items_created += 1
+    cache[sku] = item
+    return item
+
+
+def get_or_create_assembly(session, assembly_name: str, counters: Counters) -> Assembly:
+    assembly = session.scalars(
+        select(Assembly).where(Assembly.assembly_name == assembly_name)
+    ).first()
+    if assembly is None:
+        assembly = Assembly(assembly_name=assembly_name)
+        session.add(assembly)
+        session.flush()
+        counters.assemblies_created += 1
+        print(f"  note: created new assembly {assembly_name!r} (not seen before this run)")
+    else:
+        counters.assemblies_skipped += 1
+    return assembly
+
+
+def create_version_with_items(
+    session,
+    item_cache: dict,
+    counters: Counters,
+    assembly: Assembly,
+    version_name: str,
+    notes: str | None,
+    created_at: datetime | None,
+    product_sku: str,
+    ingredient_rows: list[tuple[str, Decimal]],
+) -> None:
+    """ingredient_rows: [(ingredient_sku, amount), ...] for this one version.
+    Skips creating the version if one with this name already exists under
+    the assembly (idempotent re-runs)."""
+    existing_version = session.scalars(
+        select(AssemblyVersion).where(
+            AssemblyVersion.assembly_id == assembly.assembly_id,
+            AssemblyVersion.version_name == version_name,
+        )
+    ).first()
+    if existing_version is not None:
+        counters.versions_skipped += 1
+        return
+
+    version = AssemblyVersion(
+        assembly_id=assembly.assembly_id, version_name=version_name, notes=notes
+    )
+    if created_at is not None:
+        version.created_at = created_at
+        version.updated_at = created_at
+    session.add(version)
+    session.flush()
+    counters.versions_created += 1
+
+    total_amount = Decimal("0")
+    for ingredient_sku, amount in ingredient_rows:
+        ingredient_item = get_or_create_item(session, item_cache, ingredient_sku, counters)
+        line_item = AssemblyVersionItem(
+            assembly_version_id=version.assembly_version_id,
+            product_id=ingredient_item.item_id,
+            amount=-amount,
+        )
+        if created_at is not None:
+            line_item.created_at = created_at
+            line_item.updated_at = created_at
+        session.add(line_item)
+        counters.line_items_created += 1
+        total_amount += amount
+
+    product_item = get_or_create_item(session, item_cache, product_sku, counters)
+    produced_line_item = AssemblyVersionItem(
+        assembly_version_id=version.assembly_version_id,
+        product_id=product_item.item_id,
+        amount=total_amount,
+    )
+    if created_at is not None:
+        produced_line_item.created_at = created_at
+        produced_line_item.updated_at = created_at
+    session.add(produced_line_item)
+    counters.line_items_created += 1
+
+
+def import_snapshot(session, rows: list[dict], args) -> Counters:
+    created_at = None
+    if args.created_at:
+        created_at = datetime.fromisoformat(args.created_at)
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+
     grouped: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
         sku = row["Product SKU"].strip()
         if sku:
             grouped[sku].append(row)
-    return grouped
+
+    item_cache: dict = {}
+    counters = Counters()
+    for product_sku, product_rows in sorted(grouped.items()):
+        assembly = get_or_create_assembly(session, product_sku, counters)
+        ingredient_rows = [
+            (row["Ingredient Number"].strip(), parse_amount(row["Amount"]))
+            for row in product_rows
+            if row["Ingredient Number"].strip()
+        ]
+        create_version_with_items(
+            session,
+            item_cache,
+            counters,
+            assembly,
+            args.version_name,
+            None,
+            created_at,
+            product_sku,
+            ingredient_rows,
+        )
+
+    print(f"Products in CSV: {len(grouped)}")
+    counters.report(f"Versions ({args.version_name!r})")
+    return counters
 
 
-def get_or_create_item(session, cache: dict, sku: str) -> tuple[Item, bool]:
-    """Insert-ignore: returns (item, created) - an item that already exists
-    is returned as-is, never modified."""
-    if sku in cache:
-        return cache[sku], False
-    item = session.scalars(select(Item).where(Item.sku == sku)).first()
-    created = False
-    if item is None:
-        item = Item(sku=sku, name=sku)
-        session.add(item)
-        session.flush()
-        created = True
-    cache[sku] = item
-    return item, created
+def import_changelog(session, rows: list[dict], args) -> Counters:
+    if args.version_name != "Current" or args.created_at:
+        print(
+            "note: --version-name/--created-at are ignored for a change-log CSV - "
+            "each version's name and date come from its own rows.\n"
+        )
+
+    groups: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
+    order: list[tuple[str, str, str]] = []
+    for row in rows:
+        recipe_sku = row["Recipe SKU"].strip()
+        change_date = row["Change Date"].strip()
+        label = row["Base or Adjustment Or Future Adjustment"].strip()
+        if not (recipe_sku and change_date and label):
+            continue
+        key = (recipe_sku, change_date, label)
+        if key not in groups:
+            order.append(key)
+        groups[key].append(row)
+
+    item_cache: dict = {}
+    counters = Counters()
+    assembly_cache: dict[str, Assembly] = {}
+    for recipe_sku, change_date, label in order:
+        group_rows = groups[(recipe_sku, change_date, label)]
+
+        assembly = assembly_cache.get(recipe_sku)
+        if assembly is None:
+            assembly = get_or_create_assembly(session, recipe_sku, counters)
+            assembly_cache[recipe_sku] = assembly
+
+        created_at = datetime.strptime(change_date, "%m/%d/%Y").replace(tzinfo=timezone.utc)
+        version_name = f"{label} ({created_at.date().isoformat()})"
+        reason = next((r["Reason for Change"].strip() for r in group_rows), None) or None
+        ingredient_rows = [
+            (row["Ingredient SKU"].strip(), parse_amount(row["Percent of Recipe"]))
+            for row in group_rows
+            if row["Ingredient SKU"].strip()
+        ]
+
+        create_version_with_items(
+            session,
+            item_cache,
+            counters,
+            assembly,
+            version_name,
+            reason,
+            created_at,
+            recipe_sku,
+            ingredient_rows,
+        )
+
+    print(f"Change-log groups (recipe + date + label): {len(order)}")
+    print(f"Distinct recipes: {len(assembly_cache)}")
+    counters.report("Versions")
+    return counters
 
 
 def main() -> None:
@@ -105,116 +309,28 @@ def main() -> None:
     parser.add_argument(
         "--version-name",
         default="Current",
-        help="Name for the AssemblyVersion created under each assembly (default: Current)",
+        help="Snapshot CSVs only: name for the version created under each assembly "
+        "(default: Current)",
     )
     parser.add_argument(
         "--created-at",
         default=None,
-        help="ISO date/datetime (e.g. 2026-01-15) to backdate this version and its line "
-        "items to, instead of the moment the script runs",
+        help="Snapshot CSVs only: ISO date/datetime (e.g. 2026-01-15) to backdate this "
+        "version and its line items to, instead of the moment the script runs",
     )
     parser.add_argument("--dry-run", action="store_true", help="Report counts, write nothing")
     args = parser.parse_args()
 
-    created_at = None
-    if args.created_at:
-        created_at = datetime.fromisoformat(args.created_at)
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
-
-    raw_rows = load_rows(args.csv_path)
-    grouped = group_by_product(raw_rows)
+    rows = load_rows(args.csv_path)
+    csv_format = detect_format(list(rows[0].keys()) if rows else [])
+    print(f"Detected format: {csv_format}\n")
 
     session = get_session()
     try:
-        item_cache: dict = {}
-        items_created = 0
-        assemblies_created = 0
-        assemblies_skipped = 0
-        versions_created = 0
-        versions_skipped = 0
-        line_items_created = 0
-
-        for product_sku, rows in sorted(grouped.items()):
-            product_item, was_created = get_or_create_item(session, item_cache, product_sku)
-            if was_created:
-                items_created += 1
-
-            ingredient_amounts: list[tuple[Item, Decimal]] = []
-            for row in rows:
-                ingredient_sku = row["Ingredient Number"].strip()
-                if not ingredient_sku:
-                    continue
-                ingredient_item, was_created = get_or_create_item(
-                    session, item_cache, ingredient_sku
-                )
-                if was_created:
-                    items_created += 1
-                ingredient_amounts.append((ingredient_item, parse_amount(row["Amount"])))
-
-            total_amount = sum((amount for _, amount in ingredient_amounts), Decimal("0"))
-
-            assembly = session.scalars(
-                select(Assembly).where(Assembly.assembly_name == product_sku)
-            ).first()
-            if assembly is None:
-                assembly = Assembly(assembly_name=product_sku)
-                session.add(assembly)
-                session.flush()
-                assemblies_created += 1
-            else:
-                assemblies_skipped += 1
-
-            existing_version = session.scalars(
-                select(AssemblyVersion).where(
-                    AssemblyVersion.assembly_id == assembly.assembly_id,
-                    AssemblyVersion.version_name == args.version_name,
-                )
-            ).first()
-            if existing_version is not None:
-                versions_skipped += 1
-                continue
-
-            version = AssemblyVersion(
-                assembly_id=assembly.assembly_id, version_name=args.version_name
-            )
-            if created_at is not None:
-                version.created_at = created_at
-                version.updated_at = created_at
-            session.add(version)
-            session.flush()
-            versions_created += 1
-
-            for ingredient_item, amount in ingredient_amounts:
-                line_item = AssemblyVersionItem(
-                    assembly_version_id=version.assembly_version_id,
-                    product_id=ingredient_item.item_id,
-                    amount=-amount,
-                )
-                if created_at is not None:
-                    line_item.created_at = created_at
-                    line_item.updated_at = created_at
-                session.add(line_item)
-                line_items_created += 1
-
-            produced_line_item = AssemblyVersionItem(
-                assembly_version_id=version.assembly_version_id,
-                product_id=product_item.item_id,
-                amount=total_amount,
-            )
-            if created_at is not None:
-                produced_line_item.created_at = created_at
-                produced_line_item.updated_at = created_at
-            session.add(produced_line_item)
-            line_items_created += 1
-
-        print(f"Products in CSV: {len(grouped)}")
-        print(f"Items created: {items_created}")
-        print(f"Assemblies created: {assemblies_created}")
-        print(f"Assemblies already existing (reused): {assemblies_skipped}")
-        print(f"Versions created ({args.version_name!r}): {versions_created}")
-        print(f"Versions already existing (skipped): {versions_skipped}")
-        print(f"Assembly version line items created: {line_items_created}")
+        if csv_format == "snapshot":
+            import_snapshot(session, rows, args)
+        else:
+            import_changelog(session, rows, args)
 
         if args.dry_run:
             session.rollback()
