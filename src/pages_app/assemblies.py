@@ -18,6 +18,16 @@ from src.services.assemblies import (
 )
 from src.services.items import list_all_item_choices
 
+
+def _format_amount(amount) -> str:
+    """+/-26.2 rather than +/-26.2000 - trims the trailing zeros a fixed
+    4-decimal-place Numeric column always renders with, without touching
+    the integer part (a naive rstrip("0") would mangle a whole number like
+    100.0000 into 1)."""
+    text = f"{amount:.4f}".rstrip("0").rstrip(".") or "0"
+    return text if text.startswith("-") else f"+{text}"
+
+
 ASSEMBLY_CARD_CSS = """
 <style>
 .asm-card-link,
@@ -240,7 +250,7 @@ def _render_version_detail(assembly_version_id: int) -> None:
             else:
                 st.markdown("<span style='color:#059669;'>Produced</span>", unsafe_allow_html=True)
         with row_cols[2]:
-            st.write(f"{version_item.amount:+d}")
+            st.write(_format_amount(version_item.amount))
         with row_cols[3]:
             action_cols = st.columns(2)
             with action_cols[0]:
@@ -381,13 +391,18 @@ def add_version_item_dialog(assembly_version_id: int) -> None:
 
     role = st.radio("Role", ["Consumed", "Produced"], horizontal=True, key="asmv_item_add_role")
     magnitude = st.number_input(
-        "Amount", min_value=1, step=1, value=1, key="asmv_item_add_amount"
+        "Amount",
+        min_value=0.0001,
+        step=0.01,
+        value=1.0,
+        format="%.4f",
+        key="asmv_item_add_amount",
     )
 
     col_save, col_cancel = st.columns(2)
     with col_save:
         if st.button("Save", type="primary", width="stretch", key="asmv_item_add_save"):
-            amount = -int(magnitude) if role == "Consumed" else int(magnitude)
+            amount = -magnitude if role == "Consumed" else magnitude
             with session_scope() as session:
                 add_version_item(session, assembly_version_id, product_id, amount)
             st.rerun()
@@ -418,9 +433,10 @@ def edit_version_item_dialog(assembly_version_item_id: int) -> None:
     )
     magnitude = st.number_input(
         "Amount",
-        min_value=1,
-        step=1,
-        value=abs(current_amount),
+        min_value=0.0001,
+        step=0.01,
+        value=float(abs(current_amount)),
+        format="%.4f",
         key=f"asmv_item_edit_{assembly_version_item_id}_amount",
     )
 
@@ -432,7 +448,7 @@ def edit_version_item_dialog(assembly_version_item_id: int) -> None:
             width="stretch",
             key=f"asmv_item_edit_{assembly_version_item_id}_save",
         ):
-            amount = -int(magnitude) if role == "Consumed" else int(magnitude)
+            amount = -magnitude if role == "Consumed" else magnitude
             with session_scope() as session:
                 update_version_item(session, assembly_version_item_id, amount=amount)
             st.rerun()

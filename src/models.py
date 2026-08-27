@@ -270,7 +270,9 @@ class AssemblyVersionItem(Base, TimestampMixin):
         ForeignKey("assembly_versions.assembly_version_id"), nullable=False
     )
     product_id: Mapped[int] = mapped_column(ForeignKey("items.item_id"), nullable=False)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    # A signed quantity, not necessarily a whole number - recipe amounts
+    # (e.g. 26.20 parts per batch) are fractional.
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
 
     assembly_version: Mapped["AssemblyVersion"] = relationship(back_populates="items")
     product: Mapped["Item"] = relationship()

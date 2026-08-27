@@ -24,7 +24,7 @@ from sqlalchemy import create_engine, select  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from src.db import normalize_database_url  # noqa: E402
-from src.models import Item  # noqa: E402
+from src.models import Category, Item  # noqa: E402
 
 
 def get_session():
@@ -60,6 +60,44 @@ def load_rows(csv_path: str) -> list[dict]:
         return list(csv.DictReader(f))
 
 
+def resolve_category_id(session, cache: dict, category_name: str | None, subcategory_name: str | None):
+    """Finds (or creates) the categories row matching this category/
+    subcategory pair, returning the most specific one's id - a subcategory
+    if given, else the top-level category, else None."""
+    if not category_name:
+        return None
+
+    top_key = (category_name, None)
+    top = cache.get(top_key)
+    if top is None:
+        top = session.scalars(
+            select(Category).where(Category.name == category_name, Category.parent_id.is_(None))
+        ).first()
+        if top is None:
+            top = Category(name=category_name, parent_id=None)
+            session.add(top)
+            session.flush()
+        cache[top_key] = top
+
+    if not subcategory_name:
+        return top.category_id
+
+    sub_key = (subcategory_name, top.category_id)
+    sub = cache.get(sub_key)
+    if sub is None:
+        sub = session.scalars(
+            select(Category).where(
+                Category.name == subcategory_name, Category.parent_id == top.category_id
+            )
+        ).first()
+        if sub is None:
+            sub = Category(name=subcategory_name, parent_id=top.category_id)
+            session.add(sub)
+            session.flush()
+        cache[sub_key] = sub
+    return sub.category_id
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("csv_path")
@@ -79,14 +117,17 @@ def main() -> None:
             )
         }
 
+        category_cache: dict = {}
         created = 0
         updated = 0
         for row in rows:
             sku = row["Number/SKU"].strip()
+            category_id = resolve_category_id(
+                session, category_cache, clean(row.get("Category")), clean(row.get("Subcategory"))
+            )
             fields = dict(
                 name=clean(row.get("Item")) or sku,
-                category=clean(row.get("Category")),
-                subcategory=clean(row.get("Subcategory")),
+                category_id=category_id,
                 search_terms=clean(row.get("Search Terms (separate with commas)")),
                 measured_in=clean(row.get("Measured In:")),
                 unit_weight_lb=parse_decimal(row.get("Unit Weight (lb)")),
