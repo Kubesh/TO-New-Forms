@@ -120,7 +120,7 @@ def list_all_version_choices(
     under a different assembly)."""
     stmt = (
         select(AssemblyVersion)
-        .join(Assembly)
+        .join(Assembly, AssemblyVersion.assembly_id == Assembly.assembly_id)
         .options(selectinload(AssemblyVersion.assembly))
         .order_by(Assembly.assembly_name, AssemblyVersion.version_name)
     )

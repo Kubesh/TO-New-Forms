@@ -333,11 +333,10 @@ def _render_version_detail(assembly_version_id: int) -> None:
     if version.notes:
         st.write(version.notes)
 
-    col_created, col_updated = st.columns(2)
-    with col_created:
-        st.metric("Created", _format_datetime(version.created_at))
-    with col_updated:
-        st.metric("Updated", _format_datetime(version.updated_at))
+    st.caption(
+        f"Created {_format_datetime(version.created_at)} · "
+        f"Updated {_format_datetime(version.updated_at)}"
+    )
 
     st.subheader("Items")
     if st.button("+ Add Item", key="asm_add_item"):
