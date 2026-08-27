@@ -460,7 +460,7 @@ def delete_assembly_confirm_dialog(assembly_id: int, version_count: int) -> None
 def _replaces_picker(
     choices: list[tuple[int, str, str]], key: str, current_id: int | None
 ) -> int | None:
-    labels = ["None"] + [f"{a} — {v}" for _, a, v in choices]
+    labels = ["None"] + [v for _, _, v in choices]
     ids: list[int | None] = [None] + [c[0] for c in choices]
     index = ids.index(current_id) if current_id in ids else 0
     picked = st.selectbox(
@@ -477,7 +477,7 @@ def _replaces_picker(
 @st.dialog("Add version")
 def add_version_dialog(assembly_id: int) -> None:
     with session_scope() as session:
-        choices = list_all_version_choices(session)
+        choices = list_all_version_choices(session, assembly_id=assembly_id)
 
     version_name = st.text_input("Version name*", key="asmv_add_name")
     notes = st.text_area("Notes", key="asmv_add_notes")
@@ -514,7 +514,9 @@ def edit_version_dialog(assembly_version_id: int) -> None:
         excluded_ids = get_descendant_version_ids(session, assembly_version_id)
         excluded_ids.add(assembly_version_id)
         choices = [
-            c for c in list_all_version_choices(session) if c[0] not in excluded_ids
+            c
+            for c in list_all_version_choices(session, assembly_id=version.assembly_id)
+            if c[0] not in excluded_ids
         ]
 
     version_name = st.text_input(

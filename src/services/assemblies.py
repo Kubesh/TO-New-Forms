@@ -112,18 +112,23 @@ def get_version(session: Session, assembly_version_id: int) -> AssemblyVersion |
 
 
 def list_all_version_choices(
-    session: Session, exclude_version_id: int | None = None
+    session: Session, assembly_id: int | None = None, exclude_version_id: int | None = None
 ) -> list[tuple[int, str, str]]:
-    """(assembly_version_id, assembly_name, version_name) for every version
-    across every assembly - for the "replaces" picker, which deliberately
-    isn't scoped to one assembly (a version can take over for a version
-    under a different assembly)."""
+    """(assembly_version_id, assembly_name, version_name) for versions, for
+    the "replaces" picker - scoped to one assembly when assembly_id is
+    given (the normal case: a version replaces another version of the
+    same recipe), or every version across every assembly when it's
+    omitted. The data model itself doesn't enforce this scoping - a
+    replaces_version_id can still point cross-assembly if set some other
+    way - only the picker restricts what a user can choose here."""
     stmt = (
         select(AssemblyVersion)
         .join(Assembly, AssemblyVersion.assembly_id == Assembly.assembly_id)
         .options(selectinload(AssemblyVersion.assembly))
         .order_by(Assembly.assembly_name, AssemblyVersion.version_name)
     )
+    if assembly_id is not None:
+        stmt = stmt.where(AssemblyVersion.assembly_id == assembly_id)
     if exclude_version_id is not None:
         stmt = stmt.where(AssemblyVersion.assembly_version_id != exclude_version_id)
     versions = session.scalars(stmt).all()
