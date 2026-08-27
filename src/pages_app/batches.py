@@ -224,7 +224,9 @@ def _render_detail(batch_id: int) -> None:
 
 
 def _format_units(units: float) -> str:
-    text = f"{units:.4f}".rstrip("0").rstrip(".") or "0"
+    """Displayed rounded to 1 decimal place - units is a double, stored
+    at full precision; this is display-only."""
+    text = f"{units:.1f}".rstrip("0").rstrip(".") or "0"
     return text if text.startswith("-") else f"+{text}"
 
 

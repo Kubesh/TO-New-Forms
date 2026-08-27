@@ -91,11 +91,12 @@ def _format_datetime(value) -> str:
 
 
 def _format_counted(counted) -> str:
-    """Trims a fixed 8-decimal-place Numeric column's trailing zeros
-    (68.00000000 -> 68) without touching the integer part."""
+    """Displayed rounded to 1 decimal place (68.00000000 -> 68,
+    695.7194207 -> 695.7) - the column itself keeps full precision, this
+    is display-only."""
     if counted is None:
         return "—"
-    text = f"{counted:.8f}".rstrip("0").rstrip(".")
+    text = f"{counted:.1f}".rstrip("0").rstrip(".")
     return text or "0"
 
 
