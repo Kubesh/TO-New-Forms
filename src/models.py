@@ -235,16 +235,31 @@ class Assembly(Base, TimestampMixin):
     assembly_id: Mapped[int] = mapped_column(primary_key=True)
     assembly_name: Mapped[str] = mapped_column(String(255), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    # The one version currently in use - always one of this assembly's own
+    # versions (enforced in the service layer, not the schema), never a
+    # version under a different assembly.
+    active_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assembly_versions.assembly_version_id")
+    )
 
     versions: Mapped[list["AssemblyVersion"]] = relationship(
-        back_populates="assembly", cascade="all, delete-orphan"
+        back_populates="assembly",
+        cascade="all, delete-orphan",
+        foreign_keys="AssemblyVersion.assembly_id",
+    )
+    active_version: Mapped["AssemblyVersion | None"] = relationship(
+        foreign_keys=[active_version_id]
     )
 
 
 class AssemblyVersion(Base, TimestampMixin):
     """One revision of an assembly's recipe - its own notes plus the set of
     items it consumes/produces (AssemblyVersionItem), independent of any
-    other version under the same assembly."""
+    other version under the same assembly. replaces_version_id tracks
+    lineage across a discontinued version to whichever version took over
+    for it - not restricted to the same assembly, so a version can also
+    record that it took over for a version under a different assembly
+    entirely (e.g. two recipes merged into one)."""
 
     __tablename__ = "assembly_versions"
 
@@ -252,11 +267,20 @@ class AssemblyVersion(Base, TimestampMixin):
     assembly_id: Mapped[int] = mapped_column(ForeignKey("assemblies.assembly_id"), nullable=False)
     version_name: Mapped[str] = mapped_column(String(100), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    replaces_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assembly_versions.assembly_version_id")
+    )
 
-    assembly: Mapped["Assembly"] = relationship(back_populates="versions")
+    assembly: Mapped["Assembly"] = relationship(
+        back_populates="versions", foreign_keys=[assembly_id]
+    )
     items: Mapped[list["AssemblyVersionItem"]] = relationship(
         back_populates="assembly_version", cascade="all, delete-orphan"
     )
+    replaces: Mapped["AssemblyVersion | None"] = relationship(
+        remote_side="AssemblyVersion.assembly_version_id", back_populates="replaced_by"
+    )
+    replaced_by: Mapped[list["AssemblyVersion"]] = relationship(back_populates="replaces")
 
 
 class AssemblyVersionItem(Base, TimestampMixin):
