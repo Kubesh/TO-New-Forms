@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -275,4 +275,48 @@ class AssemblyVersionItem(Base, TimestampMixin):
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
 
     assembly_version: Mapped["AssemblyVersion"] = relationship(back_populates="items")
+    product: Mapped["Item"] = relationship()
+
+
+class Batch(Base, TimestampMixin):
+    """One production run of an assembly version - parent_id lets a batch
+    trace back to whichever batch it was produced from (e.g. splitting one
+    batch's output into further batches), independent of its own version's
+    lineage. released_at is null while the batch is still being worked on;
+    setting it marks the batch done."""
+
+    __tablename__ = "batches"
+
+    batch_id: Mapped[int] = mapped_column(primary_key=True)
+    version_id: Mapped[int] = mapped_column(
+        ForeignKey("assembly_versions.assembly_version_id"), nullable=False
+    )
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("batches.batch_id"))
+    released_at: Mapped[datetime | None] = mapped_column()
+    batch_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    expire_date: Mapped[date | None] = mapped_column()
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    version: Mapped["AssemblyVersion"] = relationship()
+    parent: Mapped["Batch | None"] = relationship(remote_side="Batch.batch_id", back_populates="children")
+    children: Mapped[list["Batch"]] = relationship(back_populates="parent")
+    items: Mapped[list["BatchItem"]] = relationship(
+        back_populates="batch", cascade="all, delete-orphan"
+    )
+
+
+class BatchItem(Base, TimestampMixin):
+    """One product's movement within a batch - units is negative for a
+    product consumed by it, positive for a product it produces."""
+
+    __tablename__ = "batch_items"
+
+    batch_item_id: Mapped[int] = mapped_column(primary_key=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey("batches.batch_id"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("items.item_id"), nullable=False)
+    units: Mapped[float] = mapped_column(Float, nullable=False)
+    lot_number: Mapped[str | None] = mapped_column(String(100))
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    batch: Mapped["Batch"] = relationship(back_populates="items")
     product: Mapped["Item"] = relationship()

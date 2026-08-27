@@ -3,10 +3,12 @@ from pathlib import Path
 import streamlit as st
 
 from src.pages_app.assemblies import assemblies_page
+from src.pages_app.batches import batches_page
 from src.pages_app.categories import categories_page
 from src.pages_app.customers import customers_page
 from src.pages_app.inventory import inventory_page
 from src.pages_app.items import items_page
+from src.pages_app.production import production_page
 from src.pages_app.purchase_orders import purchase_orders_page
 
 st.set_page_config(
@@ -161,7 +163,7 @@ st.markdown(
         font-size: 0.85rem;
         letter-spacing: 0.03em;
     }
-    .st-key-tp-sidebar-subnav [data-testid="stPageLink"] {
+    [class*="st-key-tp-sidebar-subnav"] [data-testid="stPageLink"] {
         margin-left: 1.1rem;
         font-size: 0.78rem;
     }
@@ -206,8 +208,10 @@ purchase_orders = st.Page(
 )
 inventory = st.Page(inventory_page, title="Inventory", url_path="inventory")
 categories = st.Page(categories_page, title="Categories", url_path="categories")
-assemblies = st.Page(assemblies_page, title="Assemblies", url_path="assemblies")
 items = st.Page(items_page, title="Items", url_path="items")
+production = st.Page(production_page, title="Production", url_path="production")
+assemblies = st.Page(assemblies_page, title="Assemblies", url_path="assemblies")
+batches = st.Page(batches_page, title="Batches", url_path="batches")
 
 # Build the nav ourselves (position="hidden") so the sidebar always renders,
 # rather than relying on Streamlit's auto nav widget, which hides itself
@@ -216,8 +220,9 @@ pg = st.navigation(
     {
         "Customers": [customers],
         "Purchase Orders": [purchase_orders],
-        "Inventory": [inventory, categories, assemblies],
+        "Inventory": [inventory, categories],
         "Items": [items],
+        "Production": [production, assemblies, batches],
     },
     position="hidden",
 )
@@ -241,8 +246,11 @@ with st.sidebar:
     st.page_link(inventory, label="Inventory")
     with st.container(key="tp-sidebar-subnav"):
         st.page_link(categories, label="Categories")
-        st.page_link(assemblies, label="Assemblies")
     st.page_link(items, label="Items")
+    st.page_link(production, label="Production")
+    with st.container(key="tp-sidebar-subnav-production"):
+        st.page_link(assemblies, label="Assemblies")
+        st.page_link(batches, label="Batches")
 
     # Streamlit's page navigation is a client-side transition, not a full
     # page reload, so the sidebar's open/closed state survives it - on
