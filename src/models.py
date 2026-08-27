@@ -216,7 +216,9 @@ class InventoryCountItem(Base, TimestampMixin):
         ForeignKey("inventory_counts.inventory_count_id"), nullable=False
     )
     item_id: Mapped[int] = mapped_column(ForeignKey("items.item_id"), nullable=False)
-    counted: Mapped[int] = mapped_column(Integer, nullable=False)
+    # A signed quantity, not necessarily whole - some counted items are
+    # weight-based (e.g. 61.80342906 lbs).
+    counted: Mapped[Decimal] = mapped_column(Numeric(14, 8), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
 
     inventory_count: Mapped["InventoryCount"] = relationship(back_populates="items")

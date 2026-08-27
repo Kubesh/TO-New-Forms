@@ -55,6 +55,19 @@ def list_purchase_orders_for_customer(
     return list(session.scalars(stmt).unique().all())
 
 
+def list_line_items_for_item(session: Session, item_id: int) -> list[PurchaseOrderLineItem]:
+    stmt = (
+        select(PurchaseOrderLineItem)
+        .join(PurchaseOrder)
+        .options(
+            joinedload(PurchaseOrderLineItem.purchase_order).joinedload(PurchaseOrder.customer)
+        )
+        .where(PurchaseOrderLineItem.item_id == item_id)
+        .order_by(PurchaseOrder.order_date.desc().nulls_last(), PurchaseOrder.po_number.desc())
+    )
+    return list(session.scalars(stmt).unique().all())
+
+
 def get_purchase_order(session: Session, po_id: int) -> PurchaseOrder | None:
     stmt = (
         select(PurchaseOrder)

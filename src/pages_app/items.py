@@ -12,6 +12,7 @@ from src.services.categories import (
 )
 from src.services.inventory import get_last_count, list_counts_for_item
 from src.services.items import count_items, get_item, search_items, update_item
+from src.services.purchase_orders import list_line_items_for_item
 
 PAGE_SIZE = 25
 
@@ -87,6 +88,15 @@ def _format_date(value) -> str:
 
 def _format_datetime(value) -> str:
     return value.strftime("%m/%d/%y %-I:%M %p") if value else "—"
+
+
+def _format_counted(counted) -> str:
+    """Trims a fixed 8-decimal-place Numeric column's trailing zeros
+    (68.00000000 -> 68) without touching the integer part."""
+    if counted is None:
+        return "—"
+    text = f"{counted:.8f}".rstrip("0").rstrip(".")
+    return text or "0"
 
 
 def category_subcategory_picker(session, current_category, key_prefix: str) -> int | None:
@@ -337,16 +347,24 @@ def _render_detail(item_id: int) -> None:
         with session_scope() as session:
             last_count = get_last_count(session, item.item_id)
             counts = list_counts_for_item(session, item.item_id)
+            order_line_items = (
+                list_line_items_for_item(session, item.item_id) if item.sellable else []
+            )
     except RuntimeError as exc:
         st.error(str(exc))
         return
 
-    tab_overview, tab_counts, tab_details = st.tabs(["Overview", "Counts", "Details"])
+    tab_names = ["Overview", "Counts", "Details"]
+    if item.sellable:
+        tab_names.append("Orders")
+    tabs = st.tabs(tab_names)
+    tab_overview, tab_counts, tab_details = tabs[0], tabs[1], tabs[2]
+    tab_orders = tabs[3] if item.sellable else None
 
     with tab_overview:
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Current on hand", last_count.counted if last_count else "—")
+            st.metric("Current on hand", _format_counted(last_count.counted) if last_count else "—")
         with col2:
             st.metric("Last count", _format_date(last_count.created_at) if last_count else "—")
         with col3:
@@ -365,7 +383,7 @@ def _render_detail(item_id: int) -> None:
                 with col_date:
                     st.write(_format_datetime(count.created_at))
                 with col_count:
-                    st.write(str(count.counted))
+                    st.write(_format_counted(count.counted))
                 with col_note:
                     st.write(count.notes or "—")
 
@@ -386,6 +404,33 @@ def _render_detail(item_id: int) -> None:
             st.write(f"**Shopify variant #:** {item.shopify_variant_number or '—'}")
         if item.search_terms:
             st.write(f"**Search terms:** {item.search_terms}")
+
+    if tab_orders is not None:
+        with tab_orders:
+            if not order_line_items:
+                st.caption("No orders for this item yet.")
+            else:
+                header_cols = st.columns([1.5, 3, 1.5, 1])
+                for col, label in zip(header_cols, ["Date", "Customer", "PO Number", "Qty"]):
+                    with col:
+                        st.caption(label)
+                for line_item in order_line_items:
+                    po = line_item.purchase_order
+                    customer_name = po.customer.customer_name if po.customer else "—"
+                    row_cols = st.columns([1.5, 3, 1.5, 1])
+                    with row_cols[0]:
+                        st.write(_format_date(po.order_date))
+                    with row_cols[1]:
+                        st.markdown(
+                            f'<a href="/purchase-orders?po_id={po.po_id}" target="_self" '
+                            f'style="color: inherit; text-decoration: none;">'
+                            f"{html.escape(customer_name)}</a>",
+                            unsafe_allow_html=True,
+                        )
+                    with row_cols[2]:
+                        st.write(po.po_number)
+                    with row_cols[3]:
+                        st.write(str(line_item.quantity))
 
 
 @st.dialog("Edit item", width="large")
