@@ -28,7 +28,7 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO categories (name, parent_id, color, created_at, updated_at)
-        SELECT DISTINCT i.category, NULL, NULL, now(), now()
+        SELECT DISTINCT i.category, NULL::INTEGER, NULL::VARCHAR(20), now(), now()
         FROM items i
         WHERE i.category IS NOT NULL
           AND NOT EXISTS (
@@ -40,7 +40,7 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO categories (name, parent_id, color, created_at, updated_at)
-        SELECT DISTINCT i.subcategory, c.category_id, NULL, now(), now()
+        SELECT DISTINCT i.subcategory, c.category_id, NULL::VARCHAR(20), now(), now()
         FROM items i
         JOIN categories c ON c.name = i.category AND c.parent_id IS NULL
         WHERE i.subcategory IS NOT NULL
