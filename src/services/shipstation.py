@@ -10,6 +10,7 @@ everything is assumed domestic (US).
 import logging
 import os
 from datetime import date, datetime
+from decimal import Decimal
 
 import requests
 
@@ -75,6 +76,42 @@ def _address(customer, prefix: str, name: str) -> dict:
         "postalCode": getattr(customer, f"{prefix}_postal_code"),
         "country": _country_code(getattr(customer, f"{prefix}_country")),
     }
+
+
+def line_weight_lb(line) -> Decimal | None:
+    """Weight in pounds of a PO line at its *current* quantity, or None if it
+    can't be worked out.
+
+    expanded_weight is the whole line's weight, but only the CSV import ever
+    fills it in - editing a quantity in the app doesn't update it and lines
+    added in the app don't have one. So it's scaled by current/original
+    quantity, which keeps it consistent with the imported figure. Lines with
+    no expanded_weight fall back to the item's unit weight x quantity."""
+    if line.expanded_weight is not None and line.original_quantity > 0:
+        return line.expanded_weight * line.quantity / line.original_quantity
+    if line.item is not None and line.item.unit_weight_lb is not None:
+        return line.item.unit_weight_lb * line.quantity
+    return None
+
+
+def order_weight_lb(po: PurchaseOrder) -> tuple[Decimal | None, list[str]]:
+    """(total weight in pounds, SKUs whose weight is unknown). The total is
+    None unless every line with a quantity has a weight: a partial total
+    would put an underweight label on the box, so it's left off and the
+    weight is entered in ShipStation instead."""
+    total = Decimal(0)
+    missing: list[str] = []
+    for line in po.line_items:
+        if line.quantity <= 0:
+            continue
+        weight = line_weight_lb(line)
+        if weight is None:
+            missing.append(line.sku or (line.item.sku if line.item else None) or "?")
+        else:
+            total += weight
+    if missing or total <= 0:
+        return None, missing
+    return total, missing
 
 
 def build_order_payload(po: PurchaseOrder) -> dict:
@@ -146,6 +183,9 @@ def build_order_payload(po: PurchaseOrder) -> dict:
         "items": items,
         "advancedOptions": advanced_options,
     }
+    weight_lb, _ = order_weight_lb(po)
+    if weight_lb is not None:
+        payload["weight"] = {"value": float(round(weight_lb, 3)), "units": "pounds"}
     if po.requested_ship_date:
         payload["shipByDate"] = po.requested_ship_date.isoformat()
     if po.note:

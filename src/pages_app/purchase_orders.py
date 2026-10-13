@@ -27,6 +27,7 @@ from src.services.shipstation import (
     ShipStationError,
     ShipStationNotConfigured,
     order_key_for,
+    order_weight_lb,
     send_order,
 )
 
@@ -541,13 +542,21 @@ def _send_po_to_shipstation(po_id: int) -> None:
                     raise ShipStationError("This PO can't be sent - it's voided or already shipped.")
                 order = send_order(po)
                 record_send(session, po, order, order_key_for(po))
+                weight_lb, missing_weight_skus = order_weight_lb(po)
     except (ShipStationNotConfigured, ShipStationError) as exc:
         st.session_state["shipstation_flash"] = ("error", str(exc))
     else:
-        st.session_state["shipstation_flash"] = (
-            "success",
-            f"Sent to ShipStation (order ID {order['orderId']}).",
-        )
+        message = f"Sent to ShipStation (order ID {order['orderId']})."
+        if weight_lb is not None:
+            message += f" Weight sent: {weight_lb:.2f} lb."
+        else:
+            reason = (
+                f" - no weight on file for {', '.join(missing_weight_skus)}"
+                if missing_weight_skus
+                else ""
+            )
+            message += f" No weight was sent{reason}. Enter it in ShipStation before printing the label."
+        st.session_state["shipstation_flash"] = ("success", message)
     st.rerun()
 
 
