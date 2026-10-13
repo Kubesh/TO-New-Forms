@@ -1,4 +1,5 @@
 import html
+import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -10,6 +11,7 @@ from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
 from src.services.order_shipstation import list_sends_for_po, record_send, refresh_labels
 from src.services.order_types import list_order_type_names, resolve_default_order_type
+from src.services.po_sheets_sync import sync_purchase_order
 from src.services.purchase_orders import (
     add_line_item,
     count_purchase_orders,
@@ -22,6 +24,7 @@ from src.services.purchase_orders import (
     update_line_item_quantities,
     update_purchase_order,
 )
+from src.services.sheets_sync import SheetsSyncNotConfigured
 from src.services.shipping_materials import list_shipping_materials_for_po, replace_shipping_materials
 from src.services.shipstation import (
     ShipStationError,
@@ -32,6 +35,8 @@ from src.services.shipstation import (
     order_weight_lb,
     send_order,
 )
+
+logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 25
 DEFAULT_NEW_PO_ITEM_ROWS = 5
@@ -205,6 +210,24 @@ def _item_option_label(sku: str, name: str, subcategory: str | None) -> str:
     if subcategory:
         return f"{sku} — {subcategory}: {name}"
     return f"{sku} — {name}"
+
+
+def _sync_po_to_sheet(po_id: int) -> None:
+    """Best-effort: a sync failure shouldn't block saving the PO itself,
+    which has already committed by the time this runs."""
+    try:
+        with session_scope() as session:
+            po = get_purchase_order(session, po_id)
+            if po is not None:
+                sync_purchase_order(po)
+    except SheetsSyncNotConfigured:
+        pass
+    except Exception:
+        logger.exception("PO sheet sync failed for po_id=%s", po_id)
+        st.toast(
+            "Saved, but couldn't sync to the PO sheet - check the server logs.",
+            icon="⚠️",
+        )
 
 
 def _clear_dialog_state(prefix: str) -> None:
@@ -615,6 +638,7 @@ def ship_po_confirm_dialog(po_id: int, po_number: str) -> None:
             if shipped is None:
                 st.error("Couldn't mark this PO as shipped - it may already have a ship date.")
             else:
+                _sync_po_to_sheet(po_id)
                 st.rerun()
     with col_no:
         if st.button("No", width="stretch", key=f"po_ship_{po_id}_no"):
@@ -860,6 +884,7 @@ def edit_po_dialog(po_id: int) -> None:
                 update_line_item_quantities(session, quantity_updates)
                 for item_id, sku, qty in new_rows:
                     add_line_item(session, po_id, item_id, sku, qty)
+            _sync_po_to_sheet(po_id)
             _clear_dialog_state(state_prefix)
             st.rerun()
     with col_cancel:
@@ -954,14 +979,18 @@ def create_po_dialog(customer_id: int) -> None:
                             note=note.strip() or None,
                             voided=False,
                         )
+                        # add_line_item commits, which expires `po`, so grab
+                        # the id now - it isn't readable once the session closes.
+                        new_po_id = po.po_id
                         for item_id, sku, qty in new_rows:
-                            add_line_item(session, po.po_id, item_id, sku, qty)
+                            add_line_item(session, new_po_id, item_id, sku, qty)
                 except Exception:
                     st.error(
                         f"Couldn't create the PO - a purchase order numbered "
                         f"\"{po_number.strip()}\" may already exist."
                     )
                 else:
+                    _sync_po_to_sheet(new_po_id)
                     _clear_dialog_state(state_prefix)
                     st.rerun()
     with col_cancel:
