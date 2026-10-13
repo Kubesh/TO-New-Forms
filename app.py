@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import streamlit as st
@@ -216,16 +217,25 @@ batches = st.Page(batches_page, title="Batches", url_path="batches")
 # Build the nav ourselves (position="hidden") so the sidebar always renders,
 # rather than relying on Streamlit's auto nav widget, which hides itself
 # whenever there's only a single page.
-pg = st.navigation(
-    {
-        "Customers": [customers],
-        "Purchase Orders": [purchase_orders],
-        "Inventory": [inventory, categories],
-        "Items": [items],
-        "Production": [production, assemblies, batches],
-    },
-    position="hidden",
+# The Production section (Production, Assemblies, Batches) isn't shown to the
+# client yet. A page left out of st.navigation isn't routable at all, so its
+# URL can't be reached directly either. Set SHOW_PRODUCTION=1 to bring it back.
+show_production = os.environ.get("SHOW_PRODUCTION", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
 )
+
+nav_sections = {
+    "Customers": [customers],
+    "Purchase Orders": [purchase_orders],
+    "Inventory": [inventory, categories],
+    "Items": [items],
+}
+if show_production:
+    nav_sections["Production"] = [production, assemblies, batches]
+
+pg = st.navigation(nav_sections, position="hidden")
 
 with st.sidebar:
     st.markdown(
@@ -247,10 +257,11 @@ with st.sidebar:
     with st.container(key="tp-sidebar-subnav"):
         st.page_link(categories, label="Categories")
     st.page_link(items, label="Items")
-    st.page_link(production, label="Production")
-    with st.container(key="tp-sidebar-subnav-production"):
-        st.page_link(assemblies, label="Assemblies")
-        st.page_link(batches, label="Batches")
+    if show_production:
+        st.page_link(production, label="Production")
+        with st.container(key="tp-sidebar-subnav-production"):
+            st.page_link(assemblies, label="Assemblies")
+            st.page_link(batches, label="Batches")
 
     # Streamlit's page navigation is a client-side transition, not a full
     # page reload, so the sidebar's open/closed state survives it - on
