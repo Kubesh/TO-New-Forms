@@ -33,12 +33,11 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from src.db import normalize_database_url  # noqa: E402
-from src.services.order_shipstation import list_sends_awaiting_label  # noqa: E402
-from src.services.shipstation import (  # noqa: E402
-    ShipStationError,
-    ShipStationNotConfigured,
-    get_labels_for_order,
+from src.services.order_shipstation import (  # noqa: E402
+    list_sends_awaiting_label,
+    refresh_labels,
 )
+from src.services.shipstation import ShipStationError, ShipStationNotConfigured  # noqa: E402
 
 logger = logging.getLogger("shipstation_sync")
 
@@ -69,21 +68,9 @@ def sync_once(days: int) -> int:
 
         logger.info("%d ShipStation order(s) awaiting a label", len(by_order))
         for order_id, sends in by_order.items():
-            labels = get_labels_for_order(order_id)
-            now = datetime.now()
-            for send in sends:
-                send.last_checked_at = now
-            if labels:
-                # An order can have several labels (multiple packages); record
-                # the earliest one's tracking.
-                label = min(labels, key=lambda l: l["label_created_at"] or datetime.max)
-                for send in sends:
-                    send.label_created_at = label["label_created_at"]
-                    send.tracking_number = label["tracking_number"]
-                    send.carrier_code = label["carrier_code"]
-                    updated += 1
-                logger.info("Order %s has a label (tracking %s)", order_id, label["tracking_number"])
-            session.commit()
+            if refresh_labels(session, order_id, sends):
+                updated += len(sends)
+                logger.info("Order %s has a label (tracking %s)", order_id, sends[0].tracking_number)
             time.sleep(SECONDS_BETWEEN_CALLS)
     finally:
         session.close()

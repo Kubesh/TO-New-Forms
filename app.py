@@ -65,6 +65,22 @@ st.markdown(
         font-family: initial !important;
         line-height: 1;
     }
+    /* Same icon-font problem on expanders (e.g. the PO "Send history"):
+    the font override above turns the chevron's ligature into literal text
+    like "keyboard_arrow_right" drawn over the label, so hide it and draw
+    the arrow as a plain character instead. */
+    [data-testid="stExpander"] summary [data-testid="stIconMaterial"] {
+        font-size: 0 !important;
+    }
+    [data-testid="stExpander"] summary [data-testid="stIconMaterial"]::before {
+        content: "\\25B8";
+        font-size: 1rem;
+        font-family: initial !important;
+        line-height: 1;
+    }
+    [data-testid="stExpander"] details[open] summary [data-testid="stIconMaterial"]::before {
+        content: "\\25BE";
+    }
     [data-testid="stSidebar"] {
         border-right: 2px solid #1A1712 !important;
     }

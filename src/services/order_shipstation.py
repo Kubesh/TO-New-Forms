@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.models import OrderShipstation, PurchaseOrder
+from src.services.shipstation import get_labels_for_order
 
 
 def list_sends_for_po(session: Session, po_id: int) -> list[OrderShipstation]:
@@ -46,3 +47,24 @@ def list_sends_awaiting_label(session: Session, since: datetime) -> list[OrderSh
         .order_by(OrderShipstation.sent_at)
     )
     return list(session.scalars(stmt).all())
+
+
+def refresh_labels(session: Session, shipstation_order_id: int, sends: list[OrderShipstation]) -> bool:
+    """Asks ShipStation whether the order has a label yet and, if so, records
+    its label time / tracking / carrier on every given send row. Returns True
+    if a label was found. Shared by scripts/shipstation_sync.py and the PO
+    page's "Check for label" button."""
+    labels = get_labels_for_order(shipstation_order_id)
+    now = datetime.now()
+    for send in sends:
+        send.last_checked_at = now
+    if labels:
+        # An order can have several labels (multiple packages); record the
+        # earliest one's tracking.
+        label = min(labels, key=lambda l: l["label_created_at"] or datetime.max)
+        for send in sends:
+            send.label_created_at = label["label_created_at"]
+            send.tracking_number = label["tracking_number"]
+            send.carrier_code = label["carrier_code"]
+    session.commit()
+    return bool(labels)

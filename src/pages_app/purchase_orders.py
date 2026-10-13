@@ -8,7 +8,7 @@ from src.db import session_scope
 from src.services.categories import subcategory_name
 from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
-from src.services.order_shipstation import list_sends_for_po, record_send
+from src.services.order_shipstation import list_sends_for_po, record_send, refresh_labels
 from src.services.order_types import list_order_type_names, resolve_default_order_type
 from src.services.purchase_orders import (
     add_line_item,
@@ -475,10 +475,17 @@ def _render_shipstation_section(po, sends) -> None:
 
     latest = sends[0]
     count = len(sends)
-    st.write(
-        f"**Last sent:** {_format_datetime(latest.sent_at)}"
-        + (f" ({count} times)" if count > 1 else "")
-    )
+    col_sent, col_check = st.columns([3, 1])
+    with col_sent:
+        st.write(
+            f"**Last sent:** {_format_datetime(latest.sent_at)}"
+            + (f" ({count} times)" if count > 1 else "")
+        )
+    with col_check:
+        if latest.label_created_at is None and st.button(
+            "Check for label", width="stretch", key="check_shipstation_label_btn"
+        ):
+            _check_shipstation_label(po.po_id, latest.shipstation_order_id)
     if latest.label_created_at:
         tracking = f" · tracking {latest.tracking_number}" if latest.tracking_number else ""
         st.write(f"**Label created:** {_format_datetime(latest.label_created_at)}{tracking}")
@@ -501,6 +508,28 @@ def _render_shipstation_section(po, sends) -> None:
                 width="stretch",
                 hide_index=True,
             )
+
+
+def _check_shipstation_label(po_id: int, shipstation_order_id: int) -> None:
+    try:
+        with st.spinner("Checking ShipStation…"):
+            with session_scope() as session:
+                sends = [
+                    send
+                    for send in list_sends_for_po(session, po_id)
+                    if send.shipstation_order_id == shipstation_order_id
+                    and send.label_created_at is None
+                ]
+                found = refresh_labels(session, shipstation_order_id, sends)
+    except (ShipStationNotConfigured, ShipStationError) as exc:
+        st.session_state["shipstation_flash"] = ("error", str(exc))
+    else:
+        st.session_state["shipstation_flash"] = (
+            ("success", "Label found - tracking is below.")
+            if found
+            else ("error", "No label in ShipStation for this order yet.")
+        )
+    st.rerun()
 
 
 def _send_po_to_shipstation(po_id: int) -> None:
