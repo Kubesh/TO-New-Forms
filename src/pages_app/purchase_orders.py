@@ -8,6 +8,7 @@ from src.db import session_scope
 from src.services.categories import subcategory_name
 from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
+from src.services.order_shipstation import list_sends_for_po, record_send
 from src.services.order_types import list_order_type_names, resolve_default_order_type
 from src.services.purchase_orders import (
     add_line_item,
@@ -22,6 +23,12 @@ from src.services.purchase_orders import (
     update_purchase_order,
 )
 from src.services.shipping_materials import list_shipping_materials_for_po, replace_shipping_materials
+from src.services.shipstation import (
+    ShipStationError,
+    ShipStationNotConfigured,
+    order_key_for,
+    send_order,
+)
 
 PAGE_SIZE = 25
 DEFAULT_NEW_PO_ITEM_ROWS = 5
@@ -341,6 +348,7 @@ def _render_detail(po_id: int) -> None:
     with session_scope() as session:
         po = get_purchase_order(session, po_id)
         shipping_materials = list_shipping_materials_for_po(session, po_id) if po else []
+        shipstation_sends = list_sends_for_po(session, po_id) if po else []
 
     if not po:
         st.warning("Purchase order not found.")
@@ -408,6 +416,8 @@ def _render_detail(po_id: int) -> None:
     if po.note:
         st.write(f"**Note:** {po.note}")
 
+    _render_shipstation_section(po, shipstation_sends)
+
     st.subheader("Line items")
     if po.line_items:
         rows = []
@@ -442,6 +452,74 @@ def _render_detail(po_id: int) -> None:
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.write("No shipping materials recorded.")
+
+
+def _render_shipstation_section(po, sends) -> None:
+    col_title, col_btn = st.columns([3, 1])
+    with col_title:
+        st.subheader("ShipStation")
+    with col_btn:
+        blocked = po.voided or po.ship_date is not None
+        label = "Send again" if sends else "Send to ShipStation"
+        if st.button(label, width="stretch", disabled=blocked, key="send_shipstation_btn"):
+            _send_po_to_shipstation(po.po_id)
+
+    flash = st.session_state.pop("shipstation_flash", None)
+    if flash:
+        kind, message = flash
+        (st.success if kind == "success" else st.error)(message)
+
+    if not sends:
+        st.write("Not sent to ShipStation yet.")
+        return
+
+    latest = sends[0]
+    count = len(sends)
+    st.write(
+        f"**Last sent:** {_format_datetime(latest.sent_at)}"
+        + (f" ({count} times)" if count > 1 else "")
+    )
+    if latest.label_created_at:
+        tracking = f" · tracking {latest.tracking_number}" if latest.tracking_number else ""
+        st.write(f"**Label created:** {_format_datetime(latest.label_created_at)}{tracking}")
+        st.caption(
+            "A label being created doesn't mean the order has shipped - "
+            "use Ship PO once it actually leaves."
+        )
+    if count > 1 or latest.label_created_at:
+        with st.expander("Send history"):
+            st.dataframe(
+                [
+                    {
+                        "Sent": _format_datetime(send.sent_at),
+                        "ShipStation order ID": send.shipstation_order_id,
+                        "Label created": _format_datetime(send.label_created_at),
+                        "Tracking": send.tracking_number or "",
+                    }
+                    for send in sends
+                ],
+                width="stretch",
+                hide_index=True,
+            )
+
+
+def _send_po_to_shipstation(po_id: int) -> None:
+    try:
+        with st.spinner("Sending to ShipStation…"):
+            with session_scope() as session:
+                po = get_purchase_order(session, po_id)
+                if po is None or po.voided or po.ship_date is not None:
+                    raise ShipStationError("This PO can't be sent - it's voided or already shipped.")
+                order = send_order(po)
+                record_send(session, po, order, order_key_for(po))
+    except (ShipStationNotConfigured, ShipStationError) as exc:
+        st.session_state["shipstation_flash"] = ("error", str(exc))
+    else:
+        st.session_state["shipstation_flash"] = (
+            "success",
+            f"Sent to ShipStation (order ID {order['orderId']}).",
+        )
+    st.rerun()
 
 
 @st.dialog("Delete purchase order", width="small")

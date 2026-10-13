@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import BigInteger, Boolean, Float, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -154,6 +154,28 @@ class PurchaseOrderLineItem(Base, TimestampMixin):
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="line_items")
     item: Mapped["Item | None"] = relationship(back_populates="line_items")
+
+
+class OrderShipstation(Base, TimestampMixin):
+    """One row each time a PO is sent to ShipStation (so a PO can be sent
+    more than once). label_created_at / tracking_number are filled in later
+    by scripts/shipstation_sync.py once the label is printed in ShipStation -
+    that is not the same as the order having physically shipped."""
+
+    __tablename__ = "order_shipstation"
+
+    order_shipstation_id: Mapped[int] = mapped_column(primary_key=True)
+    po_id: Mapped[int] = mapped_column(
+        ForeignKey("po_headers.po_id", ondelete="CASCADE"), nullable=False
+    )
+    shipstation_order_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    order_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    order_number: Mapped[str | None] = mapped_column(String(50))
+    sent_at: Mapped[datetime] = mapped_column(nullable=False)
+    label_created_at: Mapped[datetime | None] = mapped_column()
+    tracking_number: Mapped[str | None] = mapped_column(String(100))
+    carrier_code: Mapped[str | None] = mapped_column(String(50))
+    last_checked_at: Mapped[datetime | None] = mapped_column()
 
 
 class OrderShippingMaterial(Base, TimestampMixin):
