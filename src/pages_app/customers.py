@@ -169,6 +169,11 @@ def customers_page() -> None:
             _render_detail(customer_id)
             return
 
+    # Clicking "Customers" in the sidebar re-runs this page without a
+    # customer_id, but Streamlit leaves the browser URL as it was (still
+    # ?customer_id=<last one>). Clearing here syncs the URL with what's on
+    # screen so a stale customer_id can't be picked up again.
+    st.query_params.clear()
     _render_list()
 
 
