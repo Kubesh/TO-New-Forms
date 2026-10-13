@@ -35,11 +35,28 @@ class ShipStationError(Exception):
     message is written to be shown to the user as-is."""
 
 
-def order_key_for(po: PurchaseOrder) -> str:
-    """Stable per-PO key. ShipStation updates the existing order when it
-    gets the same orderKey again, so re-sending a PO (e.g. after editing
-    it) updates its order rather than creating a duplicate."""
-    return f"PO-{po.po_id}"
+def order_key_for(po: PurchaseOrder, sequence: int = 1) -> str:
+    """Unique per send. Each send of a PO is its own order in ShipStation
+    (ShipStation updates an existing order when it sees the same orderKey, so
+    reusing the key would fold a re-send into the first order and the labels
+    couldn't be told apart). The first send keeps the plain "PO-<id>" key."""
+    return f"PO-{po.po_id}" if sequence == 1 else f"PO-{po.po_id}-{sequence}"
+
+
+def order_number_for(po: PurchaseOrder, sequence: int = 1) -> str:
+    """ShipStation's visible Order #: the PO number, with a "-2", "-3"... on
+    later sends so the orders can be told apart in ShipStation."""
+    return po.po_number if sequence == 1 else f"{po.po_number}-{sequence}"
+
+
+def next_sequence(po: PurchaseOrder, existing_keys: set[str]) -> int:
+    """The next unused send number for this PO. Skips any whose key is already
+    taken, so a deleted history row can never cause a key to be reused (which
+    would update that old order instead of creating a new one)."""
+    sequence = len(existing_keys) + 1
+    while order_key_for(po, sequence) in existing_keys:
+        sequence += 1
+    return sequence
 
 
 def _credentials() -> tuple[str, str]:
@@ -114,12 +131,13 @@ def order_weight_lb(po: PurchaseOrder) -> tuple[Decimal | None, list[str]]:
     return total, missing
 
 
-def build_order_payload(po: PurchaseOrder) -> dict:
+def build_order_payload(po: PurchaseOrder, sequence: int = 1) -> dict:
     """The createorder body for a PO. Needs po.customer and the line items
     (and each line's item) loaded - see get_purchase_order.
 
     Where the identifiers land in ShipStation:
-      - orderNumber     -> the PO number (ShipStation's "Order #")
+      - orderNumber     -> the PO number (ShipStation's "Order #"), with a
+                           "-2", "-3"... suffix on re-sends
       - customField1    -> the PO number again, so it's available as a
                            custom-field column/filter/label field
       - customField2    -> our internal order ID (po_id)
@@ -174,8 +192,8 @@ def build_order_payload(po: PurchaseOrder) -> dict:
         advanced_options["storeId"] = int(store_id)
 
     payload = {
-        "orderNumber": po.po_number,
-        "orderKey": order_key_for(po),
+        "orderNumber": order_number_for(po, sequence),
+        "orderKey": order_key_for(po, sequence),
         "orderDate": (po.order_date or date.today()).isoformat(),
         "orderStatus": "awaiting_shipment",
         "billTo": bill_to,
@@ -220,10 +238,10 @@ def _request(method: str, path: str, **kwargs) -> dict:
     return response.json()
 
 
-def send_order(po: PurchaseOrder) -> dict:
-    """Creates (or updates, by orderKey) the PO's order in ShipStation.
-    Returns ShipStation's order record, which includes 'orderId'."""
-    return _request("POST", "/orders/createorder", json=build_order_payload(po))
+def send_order(po: PurchaseOrder, sequence: int = 1) -> dict:
+    """Creates a new order in ShipStation for this send of the PO. Returns
+    ShipStation's order record, which includes 'orderId'."""
+    return _request("POST", "/orders/createorder", json=build_order_payload(po, sequence))
 
 
 def _parse_timestamp(value: str | None) -> datetime | None:

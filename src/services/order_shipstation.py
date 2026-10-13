@@ -17,12 +17,14 @@ def list_sends_for_po(session: Session, po_id: int) -> list[OrderShipstation]:
     return list(session.scalars(stmt).all())
 
 
-def record_send(session: Session, po: PurchaseOrder, shipstation_order: dict, order_key: str) -> OrderShipstation:
+def record_send(
+    session: Session, po: PurchaseOrder, shipstation_order: dict, order_key: str, order_number: str
+) -> OrderShipstation:
     send = OrderShipstation(
         po_id=po.po_id,
         shipstation_order_id=int(shipstation_order["orderId"]),
         order_key=order_key,
-        order_number=po.po_number,
+        order_number=order_number,
         sent_at=datetime.now(),
     )
     session.add(send)

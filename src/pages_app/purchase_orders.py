@@ -26,7 +26,9 @@ from src.services.shipping_materials import list_shipping_materials_for_po, repl
 from src.services.shipstation import (
     ShipStationError,
     ShipStationNotConfigured,
+    next_sequence,
     order_key_for,
+    order_number_for,
     order_weight_lb,
     send_order,
 )
@@ -463,7 +465,10 @@ def _render_shipstation_section(po, sends) -> None:
         blocked = po.voided or po.ship_date is not None
         label = "Send again" if sends else "Send to ShipStation"
         if st.button(label, width="stretch", disabled=blocked, key="send_shipstation_btn"):
-            _send_po_to_shipstation(po.po_id)
+            if sends:
+                resend_shipstation_confirm_dialog(po.po_id, po.po_number, len(sends))
+            else:
+                _send_po_to_shipstation(po.po_id)
 
     flash = st.session_state.pop("shipstation_flash", None)
     if flash:
@@ -540,8 +545,12 @@ def _send_po_to_shipstation(po_id: int) -> None:
                 po = get_purchase_order(session, po_id)
                 if po is None or po.voided or po.ship_date is not None:
                     raise ShipStationError("This PO can't be sent - it's voided or already shipped.")
-                order = send_order(po)
-                record_send(session, po, order, order_key_for(po))
+                existing_keys = {send.order_key for send in list_sends_for_po(session, po_id)}
+                sequence = next_sequence(po, existing_keys)
+                order = send_order(po, sequence)
+                record_send(
+                    session, po, order, order_key_for(po, sequence), order_number_for(po, sequence)
+                )
                 weight_lb, missing_weight_skus = order_weight_lb(po)
     except (ShipStationNotConfigured, ShipStationError) as exc:
         st.session_state["shipstation_flash"] = ("error", str(exc))
@@ -558,6 +567,23 @@ def _send_po_to_shipstation(po_id: int) -> None:
             message += f" No weight was sent{reason}. Enter it in ShipStation before printing the label."
         st.session_state["shipstation_flash"] = ("success", message)
     st.rerun()
+
+
+@st.dialog("Send to ShipStation again?", width="small")
+def resend_shipstation_confirm_dialog(po_id: int, po_number: str, send_count: int) -> None:
+    times = "once" if send_count == 1 else f"{send_count} times"
+    st.write(
+        f"PO {po_number} has already been sent to ShipStation {times}. Sending again "
+        "creates another order there - the earlier one isn't changed, so cancel it in "
+        "ShipStation if it's no longer needed."
+    )
+    col_yes, col_no = st.columns(2)
+    with col_yes:
+        if st.button("Send again", type="primary", width="stretch", key=f"po_resend_{po_id}_yes"):
+            _send_po_to_shipstation(po_id)
+    with col_no:
+        if st.button("Cancel", width="stretch", key=f"po_resend_{po_id}_no"):
+            st.rerun()
 
 
 @st.dialog("Delete purchase order", width="small")
