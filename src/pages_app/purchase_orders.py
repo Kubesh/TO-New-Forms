@@ -651,7 +651,7 @@ def _render_new_item_rows(
     excluded_item_ids: set,
     locked: bool = False,
     default_count: int = 0,
-    default_qty: int = 0,
+    default_qty: int = 1,
 ) -> list[tuple[int, str, int]]:
     """Dynamic '+ Add item' rows: an item picker + integer qty each.
 
@@ -1041,7 +1041,6 @@ def manage_shipping_materials_dialog(po_id: int) -> None:
         key_prefix=state_prefix.rstrip("_"),
         item_choices=material_choices,
         excluded_item_ids=existing_item_ids,
-        default_qty=1,
     )
 
     col_save, col_cancel = st.columns(2)
