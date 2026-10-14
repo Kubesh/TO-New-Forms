@@ -59,11 +59,16 @@ def build_view_formula(source_tab: str) -> str:
     """The formula for cell A1 of the view tab. `source_tab` is the po_data
     tab's name."""
     src = "'" + source_tab.replace("'", "''") + "'"
-    po, store, order_date, due_date, order_type, sku, qty, voided = (
-        _letter(h)
-        for h in ("PO Number", "Store Key", "Order Date", "Due Date", "Order Type", "SKU", "Quantity", "VOIDED")
-    )
+    # Letters (A, B...) for FILTER's own range arguments...
+    voided, sku_letter = _letter("VOIDED"), _letter("SKU")
     last = _letter("Line Item ID")
+    # ...but the QUERY runs over FILTER's *output*, an array rather than a
+    # range, and QUERY only accepts Col1, Col2... for those (letters give a
+    # "NO_COLUMN" parse error). Col N is the Nth column of po_data.
+    po, store, order_date, due_date, order_type, sku, qty = (
+        f"Col{HEADERS.index(h) + 1}"
+        for h in ("PO Number", "Store Key", "Order Date", "Due Date", "Order Type", "SKU", "Quantity")
+    )
 
     query = (
         f"select {po}, {store}, {order_date}, {due_date}, {order_type}, sum({qty}) "
@@ -80,7 +85,7 @@ def build_view_formula(source_tab: str) -> str:
     src_rows = (
         f"FILTER({src}!A2:{last},"
         f'ARRAYFORMULA(UPPER({src}!{voided}2:{voided}&""))<>"TRUE",'
-        f'ARRAYFORMULA({src}!{sku}2:{sku}&"")<>"")'
+        f'ARRAYFORMULA({src}!{sku_letter}2:{sku_letter}&"")<>"")'
     )
 
     # t: the pivoted QUERY - first row is headings (the SKUs, for the pivot
