@@ -25,7 +25,7 @@ from sqlalchemy.orm import joinedload, selectinload, sessionmaker  # noqa: E402
 
 from src.db import normalize_database_url  # noqa: E402
 from src.models import PurchaseOrder, PurchaseOrderLineItem  # noqa: E402
-from src.services.po_sheets_sync import sync_purchase_orders  # noqa: E402
+from src.services.po_sheets_sync import SheetLayoutError, sync_purchase_orders  # noqa: E402
 from src.services.sheets_sync import SheetsSyncNotConfigured  # noqa: E402
 
 
@@ -71,6 +71,8 @@ def main() -> None:
             sync_purchase_orders(pos)
         except SheetsSyncNotConfigured as exc:
             sys.exit(f"Not configured: {exc}")
+        except SheetLayoutError as exc:
+            sys.exit(f"Stopped, nothing was written: {exc}")
         print("Done.")
     finally:
         session.close()

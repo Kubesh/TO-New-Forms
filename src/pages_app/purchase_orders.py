@@ -11,7 +11,7 @@ from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
 from src.services.order_shipstation import list_sends_for_po, record_send, refresh_labels
 from src.services.order_types import list_order_type_names, resolve_default_order_type
-from src.services.po_sheets_sync import remove_line_items, sync_purchase_order
+from src.services.po_sheets_sync import SheetLayoutError, remove_line_items, sync_purchase_order
 from src.services.purchase_orders import (
     add_line_item,
     count_purchase_orders,
@@ -222,6 +222,13 @@ def _sync_po_to_sheet(po_id: int) -> None:
                 sync_purchase_order(po)
     except SheetsSyncNotConfigured:
         pass
+    except SheetLayoutError:
+        logger.exception("PO sheet layout doesn't match for po_id=%s", po_id)
+        st.toast(
+            "Saved, but the PO sheet's columns don't match what the app expects, so it "
+            "wasn't updated - see the server logs.",
+            icon="⚠️",
+        )
     except Exception:
         logger.exception("PO sheet sync failed for po_id=%s", po_id)
         st.toast(

@@ -48,9 +48,20 @@ DATE_COLUMNS = (0, 5, 6)  # Ship Date, Order Date, Due Date
 KEY_COLUMN = len(HEADERS) - 1
 LAST_COLUMN_LETTER = chr(ord("A") + len(HEADERS) - 1)
 
-# (spreadsheet_id, tab) -> sheetId, for tabs already checked/created this
-# process, so each sync after the first skips the setup calls.
-_ready: dict[tuple[str, str], int] = {}
+
+
+class SheetLayoutError(Exception):
+    """The PO sheet's columns aren't what this app writes to (someone changed
+    the header, or the tab holds something else). Raised before anything is
+    written: syncing into a sheet whose columns don't line up would scramble
+    it."""
+
+
+def _norm(name) -> str:
+    return str(name).strip().lower()
+
+
+_CANONICAL = {_norm(h): h for h in HEADERS}
 
 
 def _service():
@@ -129,12 +140,19 @@ def _po_rows(po: PurchaseOrder) -> list[tuple[int, list]]:
 def _upgrade_columns(service, spreadsheet_id: str, tab: str, sheet_id: int, header_row: list) -> None:
     """Brings a sheet created by an earlier version up to the current columns
     by inserting the ones it lacks (before Line Item ID, in order). Existing
-    rows keep matching, since they're found by Line Item ID. A header this
-    version doesn't recognize is left alone."""
-    in_order = [h for h in HEADERS if h in header_row] == header_row
-    if not in_order or "Line Item ID" not in header_row:
-        logger.warning("PO sheet header %s isn't a layout this app knows how to upgrade; left as is", header_row)
-        return
+    rows keep matching, since they're found by Line Item ID. Raises
+    SheetLayoutError, having written nothing, for a header that isn't one of
+    those earlier layouts."""
+    names = [_norm(h) for h in header_row]
+    wanted = [_norm(h) for h in HEADERS]
+    in_order = [n for n in wanted if n in names] == names
+    if not in_order or _norm("Line Item ID") not in names:
+        raise SheetLayoutError(
+            f"The PO sheet's header row {header_row} isn't one this app recognizes, so nothing "
+            f"was written. It expects: {HEADERS}. If the tab only holds synced data, clear it "
+            "and run scripts/sync_pos_to_sheet.py to rebuild it."
+        )
+    header_row = [_CANONICAL[n] for n in names]
     missing = [h for h in HEADERS if h not in header_row]
 
     # inheritFromBefore=False so a new column doesn't pick up the date format
@@ -188,10 +206,6 @@ def _upgrade_columns(service, spreadsheet_id: str, tab: str, sheet_id: int, head
 def _prepare(service, spreadsheet_id: str, tab: str) -> int:
     """Makes sure the tab exists and has its header row (and date formats);
     returns the tab's sheetId."""
-    cached = _ready.get((spreadsheet_id, tab))
-    if cached is not None:
-        return cached
-
     meta = (
         service.spreadsheets()
         .get(spreadsheetId=spreadsheet_id, fields="sheets.properties(sheetId,title)")
@@ -223,7 +237,7 @@ def _prepare(service, spreadsheet_id: str, tab: str) -> int:
         .execute()
     )
     header_row = (header.get("values") or [[]])[0]
-    if header_row and header_row != HEADERS:
+    if header_row and [_norm(h) for h in header_row] != [_norm(h) for h in HEADERS]:
         _upgrade_columns(service, spreadsheet_id, tab, sheet_id, header_row)
     elif not header_row:
         service.spreadsheets().values().update(
@@ -275,25 +289,36 @@ def _prepare(service, spreadsheet_id: str, tab: str) -> int:
             spreadsheetId=spreadsheet_id, body={"requests": requests}
         ).execute()
 
-    _ready[(spreadsheet_id, tab)] = sheet_id
     return sheet_id
 
 
 def _existing_rows(service, spreadsheet_id: str, tab: str) -> dict[str, int]:
-    """line_item_id (as text) -> 1-indexed sheet row, from the key column."""
+    """line_item_id (as text) -> 1-indexed sheet row, from the key column.
+
+    Raises SheetLayoutError if the sheet has data rows but none carries a Line
+    Item ID: every row would then look new and be appended again."""
     result = (
         service.spreadsheets()
         .values()
-        .get(
+        .batchGet(
             spreadsheetId=spreadsheet_id,
-            range=_a1(tab, f"{LAST_COLUMN_LETTER}:{LAST_COLUMN_LETTER}"),
+            ranges=[_a1(tab, "A:A"), _a1(tab, f"{LAST_COLUMN_LETTER}:{LAST_COLUMN_LETTER}")],
         )
         .execute()
     )
+    first_col, key_col = (r.get("values", []) for r in result["valueRanges"])
     rows: dict[str, int] = {}
-    for row_number, row in enumerate(result.get("values", []), start=1):
+    for row_number, row in enumerate(key_col, start=1):
         if row_number > 1 and row and str(row[0]).strip():
             rows[str(row[0]).strip()] = row_number
+    data_rows = sum(1 for row_number, row in enumerate(first_col, start=1) if row_number > 1 and row and str(row[0]).strip() != "")
+    if data_rows and not rows:
+        raise SheetLayoutError(
+            f"The PO sheet has {data_rows} data rows but none has a value in column "
+            f"{LAST_COLUMN_LETTER} (Line Item ID), so nothing was written - syncing now would "
+            "append every row a second time. If the tab only holds synced data, clear it "
+            "and run scripts/sync_pos_to_sheet.py to rebuild it."
+        )
     return rows
 
 
