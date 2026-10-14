@@ -12,7 +12,8 @@ column is a helper for the sync - it can be hidden in the sheet, but not
 deleted or reordered.
 
 Voided POs stay in the sheet, with TRUE in the VOIDED column (FALSE for
-everything else) so legacy tools can filter on it; a PO's rows are only removed
+everything else) so legacy tools can filter on it, and Order Type is the PO's
+own value (Direct, Faire Order, Distributor); a PO's rows are only removed
 if the PO is deleted from the app. Everything is written as RAW, so a SKU
 like "1-2" or a PO number can never be reinterpreted as a date or formula;
 dates are written as sheet date serials and the date columns are formatted
@@ -36,12 +37,13 @@ HEADERS = [
     "Order Date",
     "Due Date",
     "VOIDED",
+    "Order Type",
     "Line Item ID",
 ]
-# The layout before the VOIDED column existed. A sheet still carrying it gets
-# VOIDED inserted ahead of Line Item ID the first time it's synced.
-LEGACY_HEADERS = [h for h in HEADERS if h != "VOIDED"]
-VOIDED_COLUMN = HEADERS.index("VOIDED")
+# What existing rows get in a column when it's added to a sheet that predates
+# it. Columns not listed here (Order Type) are left blank until the PO is next
+# synced - run scripts/sync_pos_to_sheet.py to fill them all in at once.
+COLUMN_DEFAULTS = {"VOIDED": False}
 DATE_COLUMNS = (0, 5, 6)  # Ship Date, Order Date, Due Date
 KEY_COLUMN = len(HEADERS) - 1
 LAST_COLUMN_LETTER = chr(ord("A") + len(HEADERS) - 1)
@@ -116,11 +118,71 @@ def _po_rows(po: PurchaseOrder) -> list[tuple[int, list]]:
                     _serial(po.order_date),
                     _serial(po.due_date),
                     bool(po.voided),
+                    po.order_type or "",
                     line.line_item_id,
                 ],
             )
         )
     return rows
+
+
+def _upgrade_columns(service, spreadsheet_id: str, tab: str, sheet_id: int, header_row: list) -> None:
+    """Brings a sheet created by an earlier version up to the current columns
+    by inserting the ones it lacks (before Line Item ID, in order). Existing
+    rows keep matching, since they're found by Line Item ID. A header this
+    version doesn't recognize is left alone."""
+    in_order = [h for h in HEADERS if h in header_row] == header_row
+    if not in_order or "Line Item ID" not in header_row:
+        logger.warning("PO sheet header %s isn't a layout this app knows how to upgrade; left as is", header_row)
+        return
+    missing = [h for h in HEADERS if h not in header_row]
+
+    # inheritFromBefore=False so a new column doesn't pick up the date format
+    # of the Due Date column beside it. Ascending order, so each index is
+    # already final by the time its column is inserted.
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={
+            "requests": [
+                {
+                    "insertDimension": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": HEADERS.index(name),
+                            "endIndex": HEADERS.index(name) + 1,
+                        },
+                        "inheritFromBefore": False,
+                    }
+                }
+                for name in missing
+            ]
+        },
+    ).execute()
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=_a1(tab, "A1"),
+        valueInputOption="RAW",
+        body={"values": [HEADERS]},
+    ).execute()
+
+    keys = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range=_a1(tab, f"{LAST_COLUMN_LETTER}:{LAST_COLUMN_LETTER}"))
+        .execute()
+        .get("values", [])
+    )
+    for name in missing:
+        if name in COLUMN_DEFAULTS and len(keys) > 1:
+            letter = chr(ord("A") + HEADERS.index(name))
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=_a1(tab, f"{letter}2:{letter}{len(keys)}"),
+                valueInputOption="RAW",
+                body={"values": [[COLUMN_DEFAULTS[name]]] * (len(keys) - 1)},
+            ).execute()
+    logger.info("PO sheet: added column(s) %s to an existing sheet", ", ".join(missing))
 
 
 def _prepare(service, spreadsheet_id: str, tab: str) -> int:
@@ -161,53 +223,8 @@ def _prepare(service, spreadsheet_id: str, tab: str) -> int:
         .execute()
     )
     header_row = (header.get("values") or [[]])[0]
-    if header_row == LEGACY_HEADERS:
-        # inheritFromBefore=False so the new column doesn't pick up the date
-        # format of the Due Date column beside it.
-        service.spreadsheets().batchUpdate(
-            spreadsheetId=spreadsheet_id,
-            body={
-                "requests": [
-                    {
-                        "insertDimension": {
-                            "range": {
-                                "sheetId": sheet_id,
-                                "dimension": "COLUMNS",
-                                "startIndex": VOIDED_COLUMN,
-                                "endIndex": VOIDED_COLUMN + 1,
-                            },
-                            "inheritFromBefore": False,
-                        }
-                    }
-                ]
-            },
-        ).execute()
-        service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range=_a1(tab, f"{chr(ord('A') + VOIDED_COLUMN)}1"),
-            valueInputOption="RAW",
-            body={"values": [["VOIDED"]]},
-        ).execute()
-        # The inserted column is blank down the existing rows; they're all
-        # live POs as far as this sheet knows (voided rows used to be removed),
-        # so fill in FALSE now rather than leaving gaps until each PO is saved.
-        key_column = _a1(tab, f"{LAST_COLUMN_LETTER}:{LAST_COLUMN_LETTER}")
-        keys = (
-            service.spreadsheets()
-            .values()
-            .get(spreadsheetId=spreadsheet_id, range=key_column)
-            .execute()
-            .get("values", [])
-        )
-        if len(keys) > 1:
-            voided_letter = chr(ord("A") + VOIDED_COLUMN)
-            service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range=_a1(tab, f"{voided_letter}2:{voided_letter}{len(keys)}"),
-                valueInputOption="RAW",
-                body={"values": [[False]] * (len(keys) - 1)},
-            ).execute()
-        logger.info("PO sheet: added the VOIDED column to an existing sheet")
+    if header_row and header_row != HEADERS:
+        _upgrade_columns(service, spreadsheet_id, tab, sheet_id, header_row)
     elif not header_row:
         service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
