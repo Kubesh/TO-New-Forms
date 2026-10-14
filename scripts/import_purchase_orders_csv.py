@@ -2,6 +2,7 @@
 
 Usage:
     python scripts/import_purchase_orders_csv.py po_headers.csv po_line_items.csv [--dry-run] [--only-new]
+    python scripts/import_purchase_orders_csv.py po_vertical.csv [--dry-run] [--only-new] [--skip-po NUM ...]
 
 Run scripts/import_items_csv.py first - line items are matched to
 items by SKU, and scripts/import_customers_csv.py first too - POs are
@@ -20,6 +21,22 @@ is not reliably unique in the source data, so it isn't used as a key -
 instead, re-running this script replaces all line items for every PO
 present in the line items CSV (delete-then-insert per PO), which
 keeps re-imports idempotent without depending on that field.
+
+Single-file ("vertical") mode: give just one CSV with a row per line item,
+the PO header fields repeated on each row (the PO Tracker export). It needs
+the columns of both files above. Rows are grouped by PO Number into one
+header per PO plus its line items, then loaded exactly as the two-file mode
+does. Details of that mode:
+  - PO Numbers are written in the same style as the POs already in the app
+    (with or without the leading "#" - it checks), so --only-new can match
+    them.
+  - If one PO Number appears under more than one Store Key, it's split into
+    separate POs: the first store keeps the number, the others get "-2",
+    "-3"... (PO numbers are unique, and a PO belongs to one customer).
+  - "Note" is dropped if it just repeats "Box" on every row, as in the
+    PO Tracker export, so box codes don't become PO notes.
+  - "FALSE" in Note/Box (a spreadsheet formula artifact) is treated as blank.
+  - Ship Date keeps its time of day; "Voided" there just means voided.
 
 Safe to re-run: headers are upserted by po_number; line items are
 fully replaced per PO.
@@ -156,7 +173,7 @@ def import_headers(
             order_type=clean(row.get("Account Type")),
             order_date=parse_date(row.get("Order Date")),
             due_date=parse_date(row.get("Due Date")),
-            ship_date=parse_date(row.get("Ship Date")),
+            ship_date=parse_datetime(row.get("Ship Date")),
             order_entry_timestamp=parse_datetime(row.get("Order Entry Timestamp")),
             note=clean(row.get("Note")),
             voided=clean(row.get("Voided")) == "TRUE",
@@ -267,23 +284,163 @@ def import_line_items(
     )
 
 
+HEADER_COLUMNS = (
+    "Store Key",
+    "Store Name",
+    "Account Type",
+    "Ship Date",
+    "Order Date",
+    "Due Date",
+    "Order Entry Timestamp",
+    "Note",
+    "Voided",
+    "Chain Name",
+)
+LINE_COLUMNS = ("SKU", "Item Description", "Quantity", "Expanded Weight", "Box", "Unique ID", "Shopify Item #")
+
+
+def normalize_po_number(raw: str) -> str:
+    """The PO number without any leading "#"."""
+    return raw.strip().lstrip("#").strip()
+
+
+def detect_hash_style(session) -> bool:
+    """True if the POs already in the app are stored with a leading "#"
+    (a majority of them), False if without. Empty app: without, since the
+    PO sheet adds the "#" itself."""
+    numbers = list(session.scalars(select(PurchaseOrder.po_number)))
+    with_hash = sum(1 for n in numbers if n.startswith("#"))
+    return bool(numbers) and with_hash * 2 > len(numbers)
+
+
+def sheet_blank(value: str | None) -> str:
+    """Spreadsheet formulas leave FALSE in cells they meant to be empty."""
+    value = (value or "").strip()
+    return "" if value.upper() == "FALSE" else value
+
+
+def split_vertical(
+    rows: list[dict], keep_hash: bool, skip_numbers: set[str]
+) -> tuple[list[dict], list[dict], dict]:
+    """Turn a one-row-per-line-item file into the (header rows, line item
+    rows) the importer takes, plus a report of what was changed."""
+    missing = [c for c in ("PO Number", "SKU", "Quantity") + HEADER_COLUMNS if c not in rows[0]]
+    if missing:
+        raise SystemExit(f"The CSV is missing columns for single-file mode: {', '.join(missing)}")
+
+    note_is_box = all(
+        (r.get("Note") or "").strip() == (r.get("Box") or "").strip() for r in rows if r.get("PO Number", "").strip()
+    )
+
+    def final_number(base: str) -> str:
+        return ("#" + base) if keep_hash else base
+
+    # PO number -> store key -> rows, in first-seen order.
+    groups: dict[str, dict[str, list[dict]]] = {}
+    skipped_numbers: set[str] = set()
+    for row in rows:
+        base = normalize_po_number(row.get("PO Number") or "")
+        if not base:
+            continue
+        if base in skip_numbers:
+            skipped_numbers.add(base)
+            continue
+        groups.setdefault(base, {}).setdefault((row.get("Store Key") or "").strip(), []).append(row)
+
+    header_rows: list[dict] = []
+    line_rows: list[dict] = []
+    split_pos: list[tuple[str, list[str]]] = []
+    inconsistent: set[str] = set()
+    for base, by_store in groups.items():
+        if len(by_store) > 1:
+            split_pos.append((base, list(by_store)))
+        for index, (store_key, group_rows) in enumerate(by_store.items(), start=1):
+            number = final_number(base if index == 1 else f"{base}-{index}")
+            first = group_rows[0]
+            if any(
+                any((r.get(c) or "").strip() != (first.get(c) or "").strip() for c in HEADER_COLUMNS)
+                for r in group_rows[1:]
+            ):
+                inconsistent.add(number)
+            header = {"PO Number": number}
+            header.update({c: first.get(c) for c in HEADER_COLUMNS})
+            header["Note"] = "" if note_is_box else sheet_blank(first.get("Note"))
+            header_rows.append(header)
+            for row in group_rows:
+                line = {"PO Number": number}
+                line.update({c: row.get(c) for c in LINE_COLUMNS})
+                line["Box"] = sheet_blank(row.get("Box"))
+                line_rows.append(line)
+
+    report = dict(
+        source_rows=len(rows),
+        pos=len(header_rows),
+        split_pos=split_pos,
+        skipped_numbers=sorted(skipped_numbers),
+        inconsistent=sorted(inconsistent),
+        note_is_box=note_is_box,
+        keep_hash=keep_hash,
+    )
+    return header_rows, line_rows, report
+
+
+def print_vertical_report(report: dict) -> None:
+    print("=== Single-file mode ===")
+    print(f"Rows in CSV: {report['source_rows']}")
+    print(f"POs found: {report['pos']} (PO numbers written {'with' if report['keep_hash'] else 'without'} a leading #, matching the app)")
+    if report["note_is_box"]:
+        print("Note column repeats Box on every row - PO notes left blank")
+    if report["skipped_numbers"]:
+        print(f"POs skipped (--skip-po): {', '.join(report['skipped_numbers'])}")
+    if report["split_pos"]:
+        print(f"PO numbers used by more than one store, split into separate POs: {len(report['split_pos'])}")
+        for base, store_keys in report["split_pos"]:
+            print(f"  - {base}: store keys {', '.join(store_keys)} -> first keeps the number, the rest get -2, -3...")
+    if report["inconsistent"]:
+        print(f"POs whose rows disagree on a header field (first row used): {len(report['inconsistent'])}")
+        for number in report["inconsistent"][:20]:
+            print(f"  - {number}")
+    print()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("po_headers_csv")
-    parser.add_argument("po_line_items_csv")
+    parser.add_argument("po_headers_csv", help="PO headers CSV, or the single vertical CSV")
+    parser.add_argument(
+        "po_line_items_csv",
+        nargs="?",
+        help="PO line items CSV; leave out to treat the first file as a single vertical CSV",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Report counts, write nothing")
     parser.add_argument(
         "--only-new",
         action="store_true",
         help="Skip POs that already exist (header and line items) instead of overwriting them",
     )
+    parser.add_argument(
+        "--skip-po",
+        nargs="+",
+        default=[],
+        metavar="NUM",
+        help="single-file mode: leave out these PO numbers (with or without the #)",
+    )
     args = parser.parse_args()
 
-    header_rows = load_rows(args.po_headers_csv)
-    line_rows = load_rows(args.po_line_items_csv)
-
+    vertical = args.po_line_items_csv is None
     session = get_session()
     try:
+        vertical_report = None
+        if vertical:
+            header_rows, line_rows, vertical_report = split_vertical(
+                load_rows(args.po_headers_csv),
+                keep_hash=detect_hash_style(session),
+                skip_numbers={normalize_po_number(n) for n in args.skip_po},
+            )
+            print_vertical_report(vertical_report)
+        else:
+            header_rows = load_rows(args.po_headers_csv)
+            line_rows = load_rows(args.po_line_items_csv)
+
         po_id_by_number, header_stats = import_headers(
             session, header_rows, only_new=args.only_new
         )

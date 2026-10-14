@@ -90,6 +90,10 @@ def _po_rows(po: PurchaseOrder) -> list[tuple[int, list]]:
     else:
         store_key = po.store_key if po.store_key is not None else ""
 
+    # The sheet shows PO numbers as "#1234"; don't double it if the number is
+    # already stored with its "#".
+    po_number = po.po_number if po.po_number.startswith("#") else f"#{po.po_number}"
+
     rows = []
     for line in po.line_items:
         sku = line.sku or (line.item.sku if line.item else None) or ""
@@ -98,7 +102,7 @@ def _po_rows(po: PurchaseOrder) -> list[tuple[int, list]]:
                 line.line_item_id,
                 [
                     _serial(po.ship_date),
-                    f"#{po.po_number}",
+                    po_number,
                     store_key,
                     sku,
                     line.quantity,
