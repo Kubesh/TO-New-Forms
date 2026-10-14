@@ -11,7 +11,7 @@ SKU, so editing a PO or repeating a SKU on one PO can't mix rows up. That
 column is a helper for the sync - it can be hidden in the sheet, but not
 deleted or reordered.
 
-Voided POs stay in the sheet, flagged TRUE in the VOIDED column (blank for
+Voided POs stay in the sheet, with TRUE in the VOIDED column (FALSE for
 everything else) so legacy tools can filter on it; a PO's rows are only removed
 if the PO is deleted from the app. Everything is written as RAW, so a SKU
 like "1-2" or a PO number can never be reinterpreted as a date or formula;
@@ -115,7 +115,7 @@ def _po_rows(po: PurchaseOrder) -> list[tuple[int, list]]:
                     line.quantity,
                     _serial(po.order_date),
                     _serial(po.due_date),
-                    True if po.voided else "",
+                    bool(po.voided),
                     line.line_item_id,
                 ],
             )
@@ -188,6 +188,25 @@ def _prepare(service, spreadsheet_id: str, tab: str) -> int:
             valueInputOption="RAW",
             body={"values": [["VOIDED"]]},
         ).execute()
+        # The inserted column is blank down the existing rows; they're all
+        # live POs as far as this sheet knows (voided rows used to be removed),
+        # so fill in FALSE now rather than leaving gaps until each PO is saved.
+        key_column = _a1(tab, f"{LAST_COLUMN_LETTER}:{LAST_COLUMN_LETTER}")
+        keys = (
+            service.spreadsheets()
+            .values()
+            .get(spreadsheetId=spreadsheet_id, range=key_column)
+            .execute()
+            .get("values", [])
+        )
+        if len(keys) > 1:
+            voided_letter = chr(ord("A") + VOIDED_COLUMN)
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=_a1(tab, f"{voided_letter}2:{voided_letter}{len(keys)}"),
+                valueInputOption="RAW",
+                body={"values": [[False]] * (len(keys) - 1)},
+            ).execute()
         logger.info("PO sheet: added the VOIDED column to an existing sheet")
     elif not header_row:
         service.spreadsheets().values().update(
