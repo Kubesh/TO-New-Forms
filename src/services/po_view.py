@@ -67,9 +67,20 @@ def build_view_formula(source_tab: str) -> str:
 
     query = (
         f"select {po}, {store}, {order_date}, {due_date}, {order_type}, sum({qty}) "
-        f"where {sku} is not null and ({voided} = false or {voided} is null) "
+        f"where {sku} is not null "
         f"group by {po}, {store}, {order_date}, {due_date}, {order_type} "
         f"pivot {sku}"
+    )
+
+    # Voided POs are dropped by FILTER ahead of the QUERY, not by a WHERE in
+    # it: a QUERY comparison only matches the column's dominant type, so a
+    # voided flag stored as text ("TRUE") or a stray blank slips through.
+    # Comparing the upper-cased text of each cell catches TRUE however it got
+    # there. (Also drops the empty rows below the data.)
+    src_rows = (
+        f"FILTER({src}!A2:{last},"
+        f'ARRAYFORMULA(UPPER({src}!{voided}2:{voided}&""))<>"TRUE",'
+        f'ARRAYFORMULA({src}!{sku}2:{sku}&"")<>"")'
     )
 
     # t: the pivoted QUERY - first row is headings (the SKUs, for the pivot
@@ -82,7 +93,7 @@ def build_view_formula(source_tab: str) -> str:
         "=LET("
         f"skus,{_text_array([s for _, s in SKU_COLUMNS])},"
         f"head,{_text_array(VIEW_HEADINGS)},"
-        f't,QUERY({src}!A2:{last},"{query}",0),'
+        f't,QUERY({src_rows},"{query}",0),'
         "hdr,INDEX(t,1,0),"
         "data,CHOOSEROWS(t,SEQUENCE(ROWS(t)-1,1,2)),"
         "qty,MAKEARRAY(ROWS(data),COLUMNS(skus),LAMBDA(r,c,"
