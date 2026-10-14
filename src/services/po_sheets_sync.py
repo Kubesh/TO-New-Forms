@@ -11,7 +11,9 @@ SKU, so editing a PO or repeating a SKU on one PO can't mix rows up. That
 column is a helper for the sync - it can be hidden in the sheet, but not
 deleted or reordered.
 
-Voided POs are removed from the sheet. Everything is written as RAW, so a SKU
+Voided POs stay in the sheet, flagged TRUE in the VOIDED column (blank for
+everything else) so legacy tools can filter on it; a PO's rows are only removed
+if the PO is deleted from the app. Everything is written as RAW, so a SKU
 like "1-2" or a PO number can never be reinterpreted as a date or formula;
 dates are written as sheet date serials and the date columns are formatted
 once, when the header row is first created.
@@ -33,8 +35,13 @@ HEADERS = [
     "Quantity",
     "Order Date",
     "Due Date",
+    "VOIDED",
     "Line Item ID",
 ]
+# The layout before the VOIDED column existed. A sheet still carrying it gets
+# VOIDED inserted ahead of Line Item ID the first time it's synced.
+LEGACY_HEADERS = [h for h in HEADERS if h != "VOIDED"]
+VOIDED_COLUMN = HEADERS.index("VOIDED")
 DATE_COLUMNS = (0, 5, 6)  # Ship Date, Order Date, Due Date
 KEY_COLUMN = len(HEADERS) - 1
 LAST_COLUMN_LETTER = chr(ord("A") + len(HEADERS) - 1)
@@ -108,6 +115,7 @@ def _po_rows(po: PurchaseOrder) -> list[tuple[int, list]]:
                     line.quantity,
                     _serial(po.order_date),
                     _serial(po.due_date),
+                    True if po.voided else "",
                     line.line_item_id,
                 ],
             )
@@ -152,7 +160,36 @@ def _prepare(service, spreadsheet_id: str, tab: str) -> int:
         .get(spreadsheetId=spreadsheet_id, range=_a1(tab, f"A1:{LAST_COLUMN_LETTER}1"))
         .execute()
     )
-    if not header.get("values"):
+    header_row = (header.get("values") or [[]])[0]
+    if header_row == LEGACY_HEADERS:
+        # inheritFromBefore=False so the new column doesn't pick up the date
+        # format of the Due Date column beside it.
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={
+                "requests": [
+                    {
+                        "insertDimension": {
+                            "range": {
+                                "sheetId": sheet_id,
+                                "dimension": "COLUMNS",
+                                "startIndex": VOIDED_COLUMN,
+                                "endIndex": VOIDED_COLUMN + 1,
+                            },
+                            "inheritFromBefore": False,
+                        }
+                    }
+                ]
+            },
+        ).execute()
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=_a1(tab, f"{chr(ord('A') + VOIDED_COLUMN)}1"),
+            valueInputOption="RAW",
+            body={"values": [["VOIDED"]]},
+        ).execute()
+        logger.info("PO sheet: added the VOIDED column to an existing sheet")
+    elif not header_row:
         service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range=_a1(tab, "A1"),
@@ -224,10 +261,32 @@ def _existing_rows(service, spreadsheet_id: str, tab: str) -> dict[str, int]:
     return rows
 
 
+def _delete_rows(service, spreadsheet_id: str, sheet_id: int, row_numbers: list[int]) -> None:
+    # Highest row first, so deleting one doesn't shift the rest.
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={
+            "requests": [
+                {
+                    "deleteDimension": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "ROWS",
+                            "startIndex": row_number - 1,
+                            "endIndex": row_number,
+                        }
+                    }
+                }
+                for row_number in sorted(set(row_numbers), reverse=True)
+            ]
+        },
+    ).execute()
+
+
 def sync_purchase_orders(pos: list[PurchaseOrder]) -> None:
-    """Create/update the sheet rows for these POs' line items (and remove
-    the rows of any that are voided). Works the same for one PO or all of
-    them: a handful of API calls either way.
+    """Create/update the sheet rows for these POs' line items - voided POs
+    included, flagged in the VOIDED column. Works the same for one PO or all
+    of them: a handful of API calls either way.
 
     Raises SheetsSyncNotConfigured if the PO sheet's env vars aren't set
     (callers treat that as "feature not enabled"), or the Google API error on
@@ -237,19 +296,15 @@ def sync_purchase_orders(pos: list[PurchaseOrder]) -> None:
     service = _service()
     spreadsheet_id = _spreadsheet_id()
     tab = _tab_name()
-    sheet_id = _prepare(service, spreadsheet_id, tab)
+    _prepare(service, spreadsheet_id, tab)
     existing = _existing_rows(service, spreadsheet_id, tab)
 
     updates: list[dict] = []
     appends: list[list] = []
-    delete_rows: list[int] = []
     for po in pos:
         for line_item_id, values in _po_rows(po):
             row_number = existing.get(str(line_item_id))
-            if po.voided:
-                if row_number is not None:
-                    delete_rows.append(row_number)
-            elif row_number is not None:
+            if row_number is not None:
                 updates.append(
                     {
                         "range": _a1(tab, f"A{row_number}:{LAST_COLUMN_LETTER}{row_number}"),
@@ -265,26 +320,6 @@ def sync_purchase_orders(pos: list[PurchaseOrder]) -> None:
             spreadsheetId=spreadsheet_id,
             body={"valueInputOption": "RAW", "data": updates},
         ).execute()
-    if delete_rows:
-        # Highest row first, so deleting one doesn't shift the rest.
-        service.spreadsheets().batchUpdate(
-            spreadsheetId=spreadsheet_id,
-            body={
-                "requests": [
-                    {
-                        "deleteDimension": {
-                            "range": {
-                                "sheetId": sheet_id,
-                                "dimension": "ROWS",
-                                "startIndex": row_number - 1,
-                                "endIndex": row_number,
-                            }
-                        }
-                    }
-                    for row_number in sorted(set(delete_rows), reverse=True)
-                ]
-            },
-        ).execute()
     if appends:
         values_api.append(
             spreadsheetId=spreadsheet_id,
@@ -293,13 +328,25 @@ def sync_purchase_orders(pos: list[PurchaseOrder]) -> None:
             insertDataOption="INSERT_ROWS",
             body={"values": appends},
         ).execute()
-    logger.info(
-        "PO sheet sync: %d updated, %d added, %d removed",
-        len(updates),
-        len(appends),
-        len(set(delete_rows)),
-    )
+    logger.info("PO sheet sync: %d updated, %d added", len(updates), len(appends))
 
 
 def sync_purchase_order(po: PurchaseOrder) -> None:
     sync_purchase_orders([po])
+
+
+def remove_line_items(line_item_ids: list[int]) -> None:
+    """Removes the sheet rows for these line items. For when a PO is deleted
+    from the app (only possible once it's voided and unshipped), so it doesn't
+    leave orphaned rows behind. Ids that have no row are ignored."""
+    if not line_item_ids:
+        return
+    service = _service()
+    spreadsheet_id = _spreadsheet_id()
+    tab = _tab_name()
+    sheet_id = _prepare(service, spreadsheet_id, tab)
+    existing = _existing_rows(service, spreadsheet_id, tab)
+    rows = [existing[str(i)] for i in line_item_ids if str(i) in existing]
+    if rows:
+        _delete_rows(service, spreadsheet_id, sheet_id, rows)
+    logger.info("PO sheet sync: %d removed", len(rows))

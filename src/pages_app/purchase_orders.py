@@ -11,7 +11,7 @@ from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
 from src.services.order_shipstation import list_sends_for_po, record_send, refresh_labels
 from src.services.order_types import list_order_type_names, resolve_default_order_type
-from src.services.po_sheets_sync import sync_purchase_order
+from src.services.po_sheets_sync import remove_line_items, sync_purchase_order
 from src.services.purchase_orders import (
     add_line_item,
     count_purchase_orders,
@@ -226,6 +226,20 @@ def _sync_po_to_sheet(po_id: int) -> None:
         logger.exception("PO sheet sync failed for po_id=%s", po_id)
         st.toast(
             "Saved, but couldn't sync to the PO sheet - check the server logs.",
+            icon="⚠️",
+        )
+
+
+def _remove_po_rows_from_sheet(line_item_ids: list[int]) -> None:
+    """Best-effort, like _sync_po_to_sheet."""
+    try:
+        remove_line_items(line_item_ids)
+    except SheetsSyncNotConfigured:
+        pass
+    except Exception:
+        logger.exception("PO sheet row removal failed for line items %s", line_item_ids)
+        st.toast(
+            "Deleted, but couldn't remove its rows from the PO sheet - check the server logs.",
             icon="⚠️",
         )
 
@@ -616,8 +630,12 @@ def delete_po_confirm_dialog(po_id: int, po_number: str) -> None:
     with col_confirm:
         if st.button("Delete", type="primary", width="stretch", key=f"po_delete_{po_id}_confirm"):
             with session_scope() as session:
+                # Grab the line item ids first - they're gone once the PO is.
+                doomed = get_purchase_order(session, po_id)
+                line_item_ids = [li.line_item_id for li in doomed.line_items] if doomed else []
                 deleted = delete_purchase_order(session, po_id)
             if deleted:
+                _remove_po_rows_from_sheet(line_item_ids)
                 st.query_params.clear()
                 st.rerun()
             else:

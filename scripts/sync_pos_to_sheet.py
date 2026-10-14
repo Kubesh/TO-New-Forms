@@ -9,8 +9,8 @@ refreshes rows that have gone stale because something the sheet shows was
 changed elsewhere (a customer's store key, an item's SKU, a CSV re-import).
 
 Safe to re-run: rows are matched by Line Item ID, so existing rows are
-updated in place and only new line items are appended. Voided POs have their
-rows removed. Needs the GOOGLE_SHEETS_PO_* settings in .env.
+updated in place and only new line items are appended. Voided POs are included,
+flagged in the VOIDED column. Needs the GOOGLE_SHEETS_PO_* settings in .env.
 """
 import argparse
 import logging
