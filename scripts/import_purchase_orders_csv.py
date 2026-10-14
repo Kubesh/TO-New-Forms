@@ -1,7 +1,7 @@
 """Import historical purchase orders into po_headers / po_line_items.
 
 Usage:
-    python scripts/import_purchase_orders_csv.py po_headers.csv po_line_items.csv [--dry-run]
+    python scripts/import_purchase_orders_csv.py po_headers.csv po_line_items.csv [--dry-run] [--only-new]
 
 Run scripts/import_items_csv.py first - line items are matched to
 items by SKU, and scripts/import_customers_csv.py first too - POs are
@@ -23,6 +23,13 @@ keeps re-imports idempotent without depending on that field.
 
 Safe to re-run: headers are upserted by po_number; line items are
 fully replaced per PO.
+
+That also means a PO that's already in the app gets OVERWRITTEN by its CSV
+row - including anything changed in the app since (ship date from "Ship
+PO", edited quantities, notes, voiding) - and its line items get new IDs.
+Use --only-new when loading POs on top of an app that's in use: POs whose
+PO Number already exists (header or line items) are skipped entirely and
+left exactly as they are; only new PO numbers are created.
 """
 import argparse
 import csv
@@ -109,7 +116,9 @@ def load_rows(csv_path: str) -> list[dict]:
         return list(csv.DictReader(f))
 
 
-def import_headers(session, header_rows: list[dict]) -> tuple[dict[str, int], dict]:
+def import_headers(
+    session, header_rows: list[dict], only_new: bool = False
+) -> tuple[dict[str, int], dict]:
     rows = [r for r in header_rows if clean(r.get("PO Number"))]
     skipped_blank = len(header_rows) - len(rows)
 
@@ -127,11 +136,15 @@ def import_headers(session, header_rows: list[dict]) -> tuple[dict[str, int], di
 
     created = 0
     updated = 0
+    skipped_existing: set[str] = set()
     unmatched_store_keys: set[int] = set()
     new_pos: list[PurchaseOrder] = []
 
     for row in rows:
         po_number = row["PO Number"].strip()
+        if only_new and po_number in existing:
+            skipped_existing.add(po_number)
+            continue
         store_key = int(row["Store Key"]) if clean(row.get("Store Key")) else None
         customer_id = customer_by_store_key.get(store_key) if store_key is not None else None
         if store_key is not None and customer_id is None:
@@ -163,7 +176,11 @@ def import_headers(session, header_rows: list[dict]) -> tuple[dict[str, int], di
     if new_pos:
         session.flush()
 
-    po_id_by_number = {po.po_number: po.po_id for po in existing.values()}
+    po_id_by_number = {
+        po.po_number: po.po_id
+        for po in existing.values()
+        if po.po_number not in skipped_existing
+    }
     po_id_by_number.update({po.po_number: po.po_id for po in new_pos})
 
     stats = dict(
@@ -171,12 +188,18 @@ def import_headers(session, header_rows: list[dict]) -> tuple[dict[str, int], di
         skipped_blank=skipped_blank,
         created=created,
         updated=updated,
+        skipped_existing=sorted(skipped_existing),
         unmatched_store_keys=sorted(unmatched_store_keys),
     )
     return po_id_by_number, stats
 
 
-def import_line_items(session, line_rows: list[dict], po_id_by_number: dict[str, int]) -> dict:
+def import_line_items(
+    session,
+    line_rows: list[dict],
+    po_id_by_number: dict[str, int],
+    skip_po_numbers: frozenset | set = frozenset(),
+) -> dict:
     rows = [r for r in line_rows if clean(r.get("PO Number")) and clean(r.get("SKU"))]
     fully_blank = sum(
         1 for r in line_rows if not clean(r.get("PO Number")) and not clean(r.get("SKU"))
@@ -194,8 +217,12 @@ def import_line_items(session, line_rows: list[dict], po_id_by_number: dict[str,
 
     rows_by_po_number: dict[str, list[dict]] = {}
     orphan_po_numbers: set[str] = set()
+    skipped_existing_rows = 0
     for row in rows:
         po_number = row["PO Number"].strip()
+        if po_number in skip_po_numbers:
+            skipped_existing_rows += 1
+            continue
         if po_number not in po_id_by_number:
             orphan_po_numbers.add(po_number)
             continue
@@ -232,6 +259,7 @@ def import_line_items(session, line_rows: list[dict], po_id_by_number: dict[str,
         total_rows=len(line_rows),
         fully_blank_skipped=fully_blank,
         blank_sku_skipped=blank_sku_only,
+        skipped_existing_rows=skipped_existing_rows,
         pos_replaced=len(rows_by_po_number),
         line_items_inserted=inserted,
         unmatched_skus=sorted(unmatched_skus),
@@ -244,6 +272,11 @@ def main() -> None:
     parser.add_argument("po_headers_csv")
     parser.add_argument("po_line_items_csv")
     parser.add_argument("--dry-run", action="store_true", help="Report counts, write nothing")
+    parser.add_argument(
+        "--only-new",
+        action="store_true",
+        help="Skip POs that already exist (header and line items) instead of overwriting them",
+    )
     args = parser.parse_args()
 
     header_rows = load_rows(args.po_headers_csv)
@@ -251,14 +284,23 @@ def main() -> None:
 
     session = get_session()
     try:
-        po_id_by_number, header_stats = import_headers(session, header_rows)
-        line_stats = import_line_items(session, line_rows, po_id_by_number)
+        po_id_by_number, header_stats = import_headers(
+            session, header_rows, only_new=args.only_new
+        )
+        line_stats = import_line_items(
+            session,
+            line_rows,
+            po_id_by_number,
+            skip_po_numbers=set(header_stats["skipped_existing"]),
+        )
 
         print("=== Headers ===")
         print(f"Rows in CSV: {header_stats['total_rows']}")
         print(f"Rows skipped (no PO Number): {header_stats['skipped_blank']}")
         print(f"POs created: {header_stats['created']}")
         print(f"POs updated: {header_stats['updated']}")
+        if args.only_new:
+            print(f"POs skipped (already in the app): {len(header_stats['skipped_existing'])}")
         if header_stats["unmatched_store_keys"]:
             n = len(header_stats["unmatched_store_keys"])
             print(f"store_keys with no matching customer: {n}")
@@ -269,6 +311,8 @@ def main() -> None:
         print(f"Rows in CSV: {line_stats['total_rows']}")
         print(f"Rows skipped (fully blank): {line_stats['fully_blank_skipped']}")
         print(f"Rows skipped (PO present, no SKU): {line_stats['blank_sku_skipped']}")
+        if args.only_new:
+            print(f"Rows skipped (their PO is already in the app): {line_stats['skipped_existing_rows']}")
         print(f"POs whose line items were replaced: {line_stats['pos_replaced']}")
         print(f"Line items inserted: {line_stats['line_items_inserted']}")
         if line_stats["unmatched_skus"]:
