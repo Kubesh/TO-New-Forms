@@ -1,5 +1,5 @@
-"""DRAFT - not installed anywhere yet, and the formula has not been run in Google
-Sheets (there's no way to here); expect to adjust it once it has been.
+"""The formula has not been run in Google Sheets (there's no way to here), so
+check the tab after installing it and tell me what it shows.
 
 A "view" tab in the PO Google Sheet: one row per PO with a column per
 product, laid out like the legacy PO tracker.
@@ -14,7 +14,9 @@ column per product holding that PO's quantity. Box is left blank (not used).
 Voided POs are left out. Products with no column below (the coffees, which
 have never been ordered) are not shown at all.
 """
-from src.services.po_sheets_sync import HEADERS
+import os
+
+from src.services.po_sheets_sync import HEADERS, _a1
 
 # (column heading, SKU), in the order the columns appear. Headings are exactly
 # as the legacy tracker has them, including the en dash in the two
@@ -91,3 +93,85 @@ def build_view_formula(source_tab: str) -> str:
         "CHOOSECOLS(data,5),"
         "qty)),head))"
     )
+
+
+def view_tab_name() -> str:
+    return os.environ.get("GOOGLE_SHEETS_PO_VIEW_TAB_NAME", "po_view")
+
+
+class ViewTabExists(Exception):
+    """The view tab is already there; installing would overwrite it."""
+
+
+def install_view(service, spreadsheet_id: str, source_tab: str, view_tab: str, replace: bool = False) -> None:
+    """Creates the view tab with the formula in A1 (and date formats, a bold
+    frozen heading row). Refuses to touch an existing tab unless replace=True,
+    since the formula spills across the tab and anything else in the way would
+    block it - and clearing someone's edits isn't this function's call."""
+    meta = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties(sheetId,title)")
+        .execute()
+    )
+    tabs = {sheet["properties"]["title"]: sheet["properties"]["sheetId"] for sheet in meta.get("sheets", [])}
+    if source_tab not in tabs:
+        raise ValueError(f"The source tab '{source_tab}' doesn't exist in this spreadsheet yet.")
+    if view_tab in tabs and not replace:
+        raise ViewTabExists(view_tab)
+    if view_tab in tabs:
+        sheet_id = tabs[view_tab]
+        service.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id, range=_a1(view_tab, "A:ZZ"), body={}
+        ).execute()
+    else:
+        reply = (
+            service.spreadsheets()
+            .batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={"requests": [{"addSheet": {"properties": {"title": view_tab}}}]},
+            )
+            .execute()
+        )
+        sheet_id = reply["replies"][0]["addSheet"]["properties"]["sheetId"]
+
+    # USER_ENTERED so Sheets parses it as a formula (the API takes the US
+    # comma-separated syntax whatever the spreadsheet's locale).
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=_a1(view_tab, "A1"),
+        valueInputOption="USER_ENTERED",
+        body={"values": [[build_view_formula(source_tab)]]},
+    ).execute()
+    requests = [
+        {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": 1,
+                    "startColumnIndex": column,
+                    "endColumnIndex": column + 1,
+                },
+                "cell": {"userEnteredFormat": {"numberFormat": {"type": "DATE", "pattern": "mm/dd/yyyy"}}},
+                "fields": "userEnteredFormat.numberFormat",
+            }
+        }
+        for column in DATE_VIEW_COLUMNS
+    ]
+    requests.append(
+        {
+            "repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0, "endRowIndex": 1},
+                "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
+                "fields": "userEnteredFormat.textFormat.bold",
+            }
+        }
+    )
+    requests.append(
+        {
+            "updateSheetProperties": {
+                "properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}},
+                "fields": "gridProperties.frozenRowCount",
+            }
+        }
+    )
+    service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body={"requests": requests}).execute()
