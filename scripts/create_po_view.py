@@ -6,7 +6,8 @@ Usage:
     python scripts/create_po_view.py --print     # just print the formula
 
 The tab is one formula in A1 (built on QUERY) that lays the po_data tab out
-as one row per PO with a column per product - see src/services/po_view.py.
+as one row per PO (legacy tracker layout: the PO's fields, then a column per
+product) - see src/services/po_view.py.
 It keeps itself up to date; there's nothing to re-run when POs change.
 
 Needs the po_data tab to exist (run scripts/sync_pos_to_sheet.py first) and

@@ -1,34 +1,36 @@
 """The formula has not been run in Google Sheets (there's no way to here), so
 check the tab after installing it and tell me what it shows.
 
-A "view" tab in the PO Google Sheet: one row per PO with a column per
-product, laid out like the legacy PO tracker.
+A "view" tab in the PO Google Sheet laid out like the legacy PO tracker: one
+row per PO, the PO's own fields first, then a column per product holding that
+PO's quantity.
 
 The tab is a single formula in A1, built on QUERY, that reads the po_data tab
 that po_sheets_sync.py keeps up to date - so it refreshes itself as POs
 change and nothing here runs inside the app. scripts/create_po_view.py
 installs it.
 
-It's PO Number, Store Key, Order Date, Due Date, Box, Type of order, then one
-column per product holding that PO's quantity. Box is left blank (not used).
-Voided POs are left out. Products with no column below (the coffees, which
-have never been ordered) are not shown at all.
+Every PO is listed, voided ones included (the Voided? column says which).
+Columns the app doesn't track - Timestamp, Notes, Weight, Total Order Amount,
+Invoice Number, Box, Promotion Number, Sales Rep - Commission - are present
+for the layout and left blank: po_data doesn't carry them. Total Quantities
+adds up every line on the PO, including any product with no column of its own.
 """
 import os
 
 from src.services.po_sheets_sync import HEADERS, _a1
 
-# (column heading, SKU), in the order the columns appear. Headings are exactly
-# as the legacy tracker has them, including the en dash in the two
-# "Drinking Chocolate ... – SUP" ones.
+# (column heading, SKU), in the order the product columns appear. Headings are
+# exactly as the legacy tracker has them, including the en dash in the two
+# "Drinking Chocolate ... \u2013 SUP" ones.
 SKU_COLUMNS = [
     ("Drinking Chocolate - Original", "01010110"),
     ("Drinking Chocolate - Mocha", "01020110"),
     ("Drinking Chocolate - Sea Salt", "01030110"),
     ("Drinking Chocolate - Spiced", "01040110"),
     ("Drinking Chocolate - Coconut", "01050110"),
-    ("Drinking Chocolate - Original – SUP", "01010205"),
-    ("Drinking Chocolate - Coconut – SUP", "01050205"),
+    ("Drinking Chocolate - Original \u2013 SUP", "01010205"),
+    ("Drinking Chocolate - Coconut \u2013 SUP", "01050205"),
     ("Creamer - Original", "02010205"),
     ("Creamer - Cinnamon", "02020205"),
     ("Creamer - Cacao", "02030205"),
@@ -41,9 +43,35 @@ SKU_COLUMNS = [
     ("Oatmeal - Cinnamon - SUP", "03040305"),
 ]
 
-LEADING_HEADINGS = ["PO Number", "Store Key", "Order Date", "Due Date", "Box", "Type of order"]
-VIEW_HEADINGS = LEADING_HEADINGS + [name for name, _ in SKU_COLUMNS]
-DATE_VIEW_COLUMNS = (2, 3)  # Order Date, Due Date
+TOTAL = object()  # marks the Total Quantities column in LEADING_COLUMNS
+
+# The po_data columns the QUERY groups by - one output row per distinct
+# combination, i.e. per PO - in the order they come out of the QUERY.
+GROUP_COLUMNS = ["Ship Date", "PO Number", "Store Key", "Order Date", "Due Date", "Order Type", "VOIDED"]
+
+# The columns before the products, left to right: (heading, where it comes
+# from). A po_data heading takes that grouped column, TOTAL is the PO's summed
+# quantity, None is left blank.
+LEADING_COLUMNS = [
+    ("Ship Date", "Ship Date"),
+    ("PO Number", "PO Number"),
+    ("Store Key", "Store Key"),
+    ("Order Date", "Order Date"),
+    ("Due Date", "Due Date"),
+    ("Timestamp", None),
+    ("Notes", None),
+    ("Total Quantities", TOTAL),
+    ("Total Order Amount", None),
+    ("Invoice Number", None),
+    ("Box", None),
+    ("Weight", None),
+    ("Type of order", "Order Type"),
+    ("Promotion Number", None),
+    ("Voided?", "VOIDED"),
+    ("Sales Rep - Commission", None),
+]
+VIEW_HEADINGS = [heading for heading, _ in LEADING_COLUMNS] + [name for name, _ in SKU_COLUMNS]
+DATE_VIEW_COLUMNS = tuple(i for i, (h, src) in enumerate(LEADING_COLUMNS) if src in ("Ship Date", "Order Date", "Due Date"))
 
 
 def _letter(heading: str) -> str:
@@ -59,55 +87,49 @@ def build_view_formula(source_tab: str) -> str:
     """The formula for cell A1 of the view tab. `source_tab` is the po_data
     tab's name."""
     src = "'" + source_tab.replace("'", "''") + "'"
-    # Letters (A, B...) for FILTER's own range arguments...
-    voided, sku_letter = _letter("VOIDED"), _letter("SKU")
+    sku, qty = _letter("SKU"), _letter("Quantity")
     last = _letter("Line Item ID")
-    # ...but the QUERY runs over FILTER's *output*, an array rather than a
-    # range, and QUERY only accepts Col1, Col2... for those (letters give a
-    # "NO_COLUMN" parse error). Col N is the Nth column of po_data.
-    po, store, order_date, due_date, order_type, sku, qty = (
-        f"Col{HEADERS.index(h) + 1}"
-        for h in ("PO Number", "Store Key", "Order Date", "Due Date", "Order Type", "SKU", "Quantity")
-    )
+    group = [_letter(h) for h in GROUP_COLUMNS]
+    # Group (and so sort) by PO Number first.
+    group_order = [_letter("PO Number")] + [g for g in group if g != _letter("PO Number")]
 
     query = (
-        f"select {po}, {store}, {order_date}, {due_date}, {order_type}, sum({qty}) "
+        f"select {', '.join(group)}, sum({qty}) "
         f"where {sku} is not null "
-        f"group by {po}, {store}, {order_date}, {due_date}, {order_type} "
+        f"group by {', '.join(group_order)} "
         f"pivot {sku}"
     )
 
-    # Voided POs are dropped by FILTER ahead of the QUERY, not by a WHERE in
-    # it: a QUERY comparison only matches the column's dominant type, so a
-    # voided flag stored as text ("TRUE") or a stray blank slips through.
-    # Comparing the upper-cased text of each cell catches TRUE however it got
-    # there. (Also drops the empty rows below the data.)
-    src_rows = (
-        f"FILTER({src}!A2:{last},"
-        f'ARRAYFORMULA(UPPER({src}!{voided}2:{voided}&""))<>"TRUE",'
-        f'ARRAYFORMULA({src}!{sku_letter}2:{sku_letter}&"")<>"")'
-    )
+    # Each leading column as an expression over `data`.
+    def column(source):
+        if source is TOTAL:
+            return "tot"
+        if source is None:
+            return "bl"
+        return f"CHOOSECOLS(data,{GROUP_COLUMNS.index(source) + 1})"
 
+    n = len(GROUP_COLUMNS)
     # t: the pivoted QUERY - first row is headings (the SKUs, for the pivot
     # columns), the rest one row per PO, with a column only for each SKU that
-    # actually appears. The MATCH looks each wanted SKU up in that heading row
-    # (wildcard so it still matches if Sheets appends a label to the SKU), so
-    # the product columns always come out in the fixed order below, blank
-    # where a SKU has no column yet.
+    # actually appears. `data` is those PO rows. The MATCH looks each wanted
+    # SKU up in the heading row (wildcard so it still matches if Sheets
+    # appends a label to the SKU), so the product columns always come out in
+    # the fixed order, blank where a SKU has no column yet. `tot` sums every
+    # pivoted column of a row - all products, not just the ones shown.
     return (
         "=LET("
         f"skus,{_text_array([s for _, s in SKU_COLUMNS])},"
         f"head,{_text_array(VIEW_HEADINGS)},"
-        f't,QUERY({src_rows},"{query}",0),'
+        f't,QUERY({src}!A2:{last},"{query}",0),'
         "hdr,INDEX(t,1,0),"
         "data,CHOOSEROWS(t,SEQUENCE(ROWS(t)-1,1,2)),"
+        'bl,MAKEARRAY(ROWS(data),1,LAMBDA(r,c,"")),'
+        f"tot,BYROW(CHOOSECOLS(data,SEQUENCE(1,COLUMNS(data)-{n},{n + 1})),LAMBDA(r,SUM(r))),"
         "qty,MAKEARRAY(ROWS(data),COLUMNS(skus),LAMBDA(r,c,"
         'IFERROR(INDEX(data,r,MATCH(INDEX(skus,1,c)&"*",hdr,0)),""))),'
         "IFERROR(VSTACK(head,HSTACK("
-        "CHOOSECOLS(data,1,2,3,4),"
-        'MAKEARRAY(ROWS(data),1,LAMBDA(r,c,"")),'
-        "CHOOSECOLS(data,5),"
-        "qty)),head))"
+        + ",".join(column(source) for _, source in LEADING_COLUMNS)
+        + ",qty)),head))"
     )
 
 
