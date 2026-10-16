@@ -11,9 +11,10 @@ change and nothing here runs inside the app. scripts/create_po_view.py
 installs it.
 
 Every PO is listed, voided ones included (the Voided? column says which).
-Columns the app doesn't track - Timestamp, Notes, Weight, Total Order Amount,
-Invoice Number, Box, Promotion Number, Sales Rep - Commission - are present
-for the layout and left blank: po_data doesn't carry them. Total Quantities
+Timestamp shows the Order Date. Columns the app doesn't track - Notes, Weight,
+Total Order Amount, Invoice Number, Box, Promotion Number, Sales Rep -
+Commission - are present for the layout and left blank: po_data doesn't carry
+them. Total Quantities
 adds up every line on the PO, including any product with no column of its own.
 """
 import os
@@ -58,7 +59,7 @@ LEADING_COLUMNS = [
     ("Store Key", "Store Key"),
     ("Order Date", "Order Date"),
     ("Due Date", "Due Date"),
-    ("Timestamp", None),
+    ("Timestamp", "Order Date"),  # the legacy tracker's Timestamp is just the order date here
     ("Notes", None),
     ("Total Quantities", TOTAL),
     ("Total Order Amount", None),
