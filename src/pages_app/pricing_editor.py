@@ -34,10 +34,8 @@ PRICING_CSS = """
 .price-row-name { font-weight: 700; line-height: 1.3; }
 .price-row-sub { font-size: 0.78rem; opacity: 0.65; line-height: 1.25; }
 .price-row-amount { font-size: 1rem; line-height: 1.3; font-weight: 700; text-align: right; }
-.price-row-badge {
-    display: block; text-align: right; font-size: 0.7rem; opacity: 0.65; line-height: 1.2;
-    text-transform: uppercase; letter-spacing: 0.04em;
-}
+[data-testid="stDialog"] [data-testid="stNumberInputStepUp"],
+[data-testid="stDialog"] [data-testid="stNumberInputStepDown"] { display: none; }
 .st-key-pricing-savebar {
     position: sticky; top: 3.5rem; z-index: 50;
     background: #FFF2A8; border: 2px solid #1A1712; border-radius: 0.625rem;
@@ -104,9 +102,9 @@ def render_pricing(
                     st.rerun()
 
     st.caption(
-        f"Per-case prices for {who}. The price shown is what a new purchase order line gets; "
-        f"\"{own_label}\" marks one set here, the rest is inherited. Changes apply to purchase "
-        "orders entered from now on - existing POs keep the price they were entered at."
+        f"Per-case prices for {who}. The price shown is what a new purchase order line gets "
+        "(a yellow row has an unsaved change). Changes apply to purchase orders entered from "
+        "now on - existing POs keep the price they were entered at."
     )
     tab_line, tab_sku = st.tabs(["Line", "SKU"])
 
@@ -173,16 +171,14 @@ def _price_row(
 ) -> None:
     pending = _pending()
     changed = target in pending
-    amount, badge = _money(effective), (own_label if own is not None else "")
+    amount = _money(effective)
     if changed:
         new_price, _ = pending[target]
         if new_price is not None:
-            amount, badge = _money(new_price), f"{own_label} · unsaved"
+            amount = _money(new_price)
         elif own is not None:
             # Removed here: the inherited price isn't known until it's saved.
-            amount, badge = "Inherited", "Removing · unsaved"
-        else:
-            badge = "Unsaved"
+            amount = "Inherited"
 
     safe_target = target.replace(":", "-")
     with st.container(key=f"pricerow-{'changed-' if changed else ''}{safe_target}"):
@@ -195,8 +191,7 @@ def _price_row(
             )
         with col_price:
             st.markdown(
-                f'<div class="price-row-amount">{html.escape(amount)}</div>'
-                f'<span class="price-row-badge">{html.escape(badge)}</span>',
+                f'<div class="price-row-amount">{html.escape(amount)}</div>',
                 unsafe_allow_html=True,
             )
         with col_edit:
