@@ -199,8 +199,8 @@ def render_pricing(
                     continue
                 _price_row(
                     target=f"i:{row['item_id']}",
-                    title=row["sku"],
-                    subtitle=f"{row['name']}  ·  {row['category']}",
+                    title=f"{row['category']}: {row['name']}" if row["category"] else row["name"],
+                    subtitle=row["sku"],
                     own=row["own"],
                     effective=row["effective"],
                     own_label=own_label,
