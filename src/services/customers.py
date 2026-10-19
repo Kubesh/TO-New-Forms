@@ -279,9 +279,13 @@ def _check_customer_type_name(session: Session, name: str, exclude_id: int | Non
     return name
 
 
-def create_customer_type(session: Session, name: str, notes: str | None = None) -> CustomerType:
+def create_customer_type(
+    session: Session, name: str, notes: str | None = None, color: str | None = None
+) -> CustomerType:
     customer_type = CustomerType(
-        name=_check_customer_type_name(session, name), notes=(notes or "").strip() or None
+        name=_check_customer_type_name(session, name),
+        notes=(notes or "").strip() or None,
+        color=color or None,
     )
     session.add(customer_type)
     session.commit()
@@ -290,13 +294,18 @@ def create_customer_type(session: Session, name: str, notes: str | None = None) 
 
 
 def update_customer_type(
-    session: Session, customer_type_id: int, name: str, notes: str | None = None
+    session: Session,
+    customer_type_id: int,
+    name: str,
+    notes: str | None = None,
+    color: str | None = None,
 ) -> CustomerType | None:
     customer_type = session.get(CustomerType, customer_type_id)
     if customer_type is None:
         return None
     customer_type.name = _check_customer_type_name(session, name, exclude_id=customer_type_id)
     customer_type.notes = (notes or "").strip() or None
+    customer_type.color = color or None
     session.commit()
     session.refresh(customer_type)
     return customer_type

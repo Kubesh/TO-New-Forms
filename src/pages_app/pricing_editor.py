@@ -74,10 +74,8 @@ def render_pricing(
     """key must be unique per scope on the page (it namespaces widget state)."""
     if customer_id is not None:
         own_label = "Customer price"
-    elif customer_type_id is not None:
-        own_label = "Type price"
     else:
-        own_label = "Default price"
+        own_label = "Type price"
     scope = {"customer_type_id": customer_type_id, "customer_id": customer_id}
 
     # Staged edits belong to one scope; arriving at a different one drops them.
@@ -87,7 +85,7 @@ def render_pricing(
         st.session_state[PENDING_EXCL] = {}
     pending = _pending()
     pending_excl = _pending_excl()
-    can_exclude = customer_id is not None or customer_type_id is not None
+    can_exclude = True
     who_short = "customer" if customer_id is not None else "customer type"
 
     st.markdown(PRICING_CSS, unsafe_allow_html=True)
@@ -135,13 +133,11 @@ def render_pricing(
             "Per-case prices for this customer. These are used on their POs instead of "
             "their customer type's pricing."
         )
-    elif customer_type_id is not None:
+    else:
         intro = (
             "Per-case prices for this customer type. A customer's pricing on a PO will be "
             "set to this unless the customer has custom pricing set."
         )
-    else:
-        intro = "Per-case prices for customers with no pricing of their own."
     st.caption(f"{intro} You can set the pricing by the line or by the individual SKU.")
     tab_line, tab_sku = st.tabs(["Line", "SKU"])
 

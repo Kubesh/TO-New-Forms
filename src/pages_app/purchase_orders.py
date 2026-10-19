@@ -490,7 +490,8 @@ def _render_detail(po_id: int) -> None:
             if unpriced:
                 st.caption(
                     f"{unpriced} line{'s' if unpriced != 1 else ''} with no price yet - "
-                    "set it on the customer or customer type Pricing tab; it isn't in the total."
+                    "set it on the customer or customer type Pricing tab. It isn't in the total, "
+                    "and the order can't go to QuickBooks until every line is priced."
                 )
     else:
         st.write("No line items on file.")

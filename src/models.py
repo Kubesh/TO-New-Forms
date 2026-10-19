@@ -26,6 +26,7 @@ class CustomerType(Base, TimestampMixin):
     customer_type_id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     notes: Mapped[str | None] = mapped_column(Text)
+    color: Mapped[str | None] = mapped_column(String(20))
 
     customers: Mapped[list["Customer"]] = relationship(back_populates="customer_type")
 

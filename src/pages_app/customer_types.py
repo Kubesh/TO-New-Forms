@@ -14,15 +14,12 @@ from src.services.customers import (
     update_customer_type,
 )
 
-DEFAULT_PARAM = "default"
 CUSTOMER_LIST_LIMIT = 200
+DEFAULT_COLOR = "#F4591A"
 
 
 def customer_types_page() -> None:
     param = st.query_params.get("customer_type_id")
-    if param == DEFAULT_PARAM:
-        _render_detail(None)
-        return
     if param:
         try:
             customer_type_id = int(param)
@@ -71,14 +68,6 @@ def _render_list() -> None:
 
     cards = [
         _card_html(
-            f"?customer_type_id={DEFAULT_PARAM}",
-            "Default pricing",
-            "used when nothing more specific is set",
-            accent="#F4591A",
-        )
-    ]
-    cards += [
-        _card_html(
             f"?customer_type_id={t.customer_type_id}",
             t.name,
             _count_label(counts.get(t.customer_type_id, 0)),
@@ -91,41 +80,28 @@ def _render_list() -> None:
     )
 
 
-def _render_detail(customer_type_id: int | None) -> None:
-    """customer_type_id None is the default-pricing page."""
-    customer_type = None
-    if customer_type_id is not None:
-        try:
-            with session_scope() as session:
-                customer_type = get_customer_type(session, customer_type_id)
-        except RuntimeError as exc:
-            st.error(str(exc))
-            return
-        if customer_type is None:
-            st.warning("Customer type not found.")
-            if st.button("← Back to list"):
-                st.query_params.clear()
-                st.rerun()
-            return
+def _render_detail(customer_type_id: int) -> None:
+    try:
+        with session_scope() as session:
+            customer_type = get_customer_type(session, customer_type_id)
+    except RuntimeError as exc:
+        st.error(str(exc))
+        return
+    if customer_type is None:
+        st.warning("Customer type not found.")
+        if st.button("← Back to list"):
+            st.query_params.clear()
+            st.rerun()
+        return
 
     col_back, col_edit = st.columns([3, 1])
     with col_back:
         if st.button("← Back to list"):
             st.query_params.clear()
             st.rerun()
-    if customer_type is not None:
-        with col_edit:
-            if st.button("Edit customer type", width="stretch"):
-                customer_type_dialog(customer_type.customer_type_id)
-
-    if customer_type is None:
-        st.header("Default pricing")
-        st.caption(
-            "Used for a customer when neither they, their parent account, nor their "
-            "customer type has a price."
-        )
-        render_pricing(key="pricing_default")
-        return
+    with col_edit:
+        if st.button("Edit customer type", width="stretch"):
+            customer_type_dialog(customer_type.customer_type_id)
 
     st.header(customer_type.name)
     if customer_type.notes:
@@ -171,6 +147,11 @@ def customer_type_dialog(customer_type_id: int | None = None) -> None:
     prefix = f"ct_{customer_type_id or 'new'}"
     name = st.text_input("Name*", value=existing.name if existing else "", key=f"{prefix}_name")
     notes = st.text_area("Notes", value=existing.notes or "" if existing else "", key=f"{prefix}_notes")
+    color = st.color_picker(
+        "Color",
+        value=(existing.color if existing and existing.color else DEFAULT_COLOR),
+        key=f"{prefix}_color",
+    )
 
     col_save, col_cancel = st.columns(2)
     with col_save:
@@ -178,9 +159,9 @@ def customer_type_dialog(customer_type_id: int | None = None) -> None:
             try:
                 with session_scope() as session:
                     if existing:
-                        update_customer_type(session, customer_type_id, name, notes)
+                        update_customer_type(session, customer_type_id, name, notes, color)
                     else:
-                        create_customer_type(session, name, notes)
+                        create_customer_type(session, name, notes, color)
             except ValueError as exc:
                 st.error(str(exc))
             else:

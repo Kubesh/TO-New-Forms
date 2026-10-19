@@ -2,7 +2,8 @@
 
 A price is set for a target - one item (a SKU), or a category (a line or a form
 factor: every item under it) - at one of three scopes (see ItemPrice): a
-customer, a customer type, or the default.
+customer or a customer type. There is no default price: an item with no price
+for a customer is left unpriced.
 
 For a given customer the scopes are tried in this order, and the first one that
 has a price for the item wins:
@@ -11,7 +12,6 @@ has a price for the item wins:
   2. their parent account's own prices    ("parent")   - a chain's negotiated
                                                          price covers its stores
   3. the prices for their customer type   ("type")
-  4. the default prices                   ("default")
 
 Within one scope, a price on the item's SKU wins over a price on its category,
 and the nearest category wins (sub sub category, then its line, then the top-level
@@ -34,27 +34,24 @@ SOURCE_LABELS = {
     "customer": "Customer price",
     "parent": "Parent account's price",
     "type": "Customer type price",
-    "default": "Default price",
 }
 
 # A scope is (label, customer_id, customer_type_id) - the label is one of the
 # SOURCE_LABELS keys, the ids pick out which ItemPrice rows belong to it.
 Scope = tuple[str, int | None, int | None]
-DEFAULT_SCOPE: Scope = ("default", None, None)
 
 
 def customer_scopes(session: Session, customer_id: int | None) -> list[Scope]:
     """The scopes that apply to a customer, highest priority first. A PO not
-    linked to a customer (None) can only get default prices."""
+    linked to a customer (None) gets no prices."""
     customer = session.get(Customer, customer_id) if customer_id else None
     if customer is None:
-        return [DEFAULT_SCOPE]
+        return []
     scopes: list[Scope] = [("customer", customer.customer_id, None)]
     if customer.parent_id:
         scopes.append(("parent", customer.parent_id, None))
     if customer.customer_type_id:
         scopes.append(("type", None, customer.customer_type_id))
-    scopes.append(DEFAULT_SCOPE)
     return scopes
 
 
@@ -62,13 +59,12 @@ def view_scopes(
     session: Session, customer_type_id: int | None = None, customer_id: int | None = None
 ) -> list[Scope]:
     """The scopes behind a pricing editor: a customer sees everything that
-    applies to them, a customer type sees its own prices over the default's,
-    and the default sees only itself."""
+    applies to them, a customer type sees its own prices."""
     if customer_id is not None:
         return customer_scopes(session, customer_id)
     if customer_type_id is not None:
-        return [("type", None, customer_type_id), DEFAULT_SCOPE]
-    return [DEFAULT_SCOPE]
+        return [("type", None, customer_type_id)]
+    raise ValueError("Prices are for a customer or a customer type.")
 
 
 def _own_scope(customer_type_id: int | None, customer_id: int | None) -> Scope:
@@ -78,7 +74,7 @@ def _own_scope(customer_type_id: int | None, customer_id: int | None) -> Scope:
         return ("customer", customer_id, None)
     if customer_type_id is not None:
         return ("type", None, customer_type_id)
-    return DEFAULT_SCOPE
+    raise ValueError("Prices are for a customer or a customer type.")
 
 
 def _category_maps(session: Session):
@@ -114,6 +110,8 @@ def _price_lookup(session: Session, scopes: list[Scope], item_ids, category_ids)
     """{(item_id, category_id, customer_id, customer_type_id): price} for the
     given targets in the given scopes."""
     item_ids, category_ids = list(item_ids), list(category_ids)
+    if not scopes:
+        return {}
     targets = []
     if item_ids:
         targets.append(ItemPrice.item_id.in_(item_ids))
@@ -267,7 +265,7 @@ def set_price(
     customer_id: int | None = None,
 ) -> None:
     """Sets (or with None, clears) one price: for an item or a category, at
-    a customer's, a customer type's, or (neither given) the default scope."""
+    a customer's or a customer type's scope."""
     _apply_price(session, price, item_id, category_id, customer_type_id, customer_id)
     session.commit()
 
@@ -288,7 +286,7 @@ def set_prices(session: Session, changes: list[dict]) -> None:
 
 
 def _exclusion_scope_filter(scopes: list[Scope]):
-    """The default scope has no exclusions, so only customer / type scopes."""
+    """Exclusions only exist for customer / type scopes."""
     parts = []
     for _, customer_id, type_id in scopes:
         if customer_id is not None:
@@ -332,8 +330,6 @@ def set_exclusions(session: Session, changes: list[dict]) -> None:
         _, customer_id, type_id = _own_scope(
             change.get("customer_type_id"), change.get("customer_id")
         )
-        if customer_id is None and type_id is None:
-            raise ValueError("Exclusions are for a customer type or a customer.")
         existing = session.scalars(
             select(CategoryExclusion).where(
                 CategoryExclusion.category_id == change["category_id"],
