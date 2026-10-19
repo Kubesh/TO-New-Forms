@@ -70,3 +70,14 @@ def refresh_labels(session: Session, shipstation_order_id: int, sends: list[Orde
             send.carrier_code = label["carrier_code"]
     session.commit()
     return bool(labels)
+
+
+def list_recent_sends(session: Session, limit: int = 50) -> list[tuple[OrderShipstation, str]]:
+    """The latest sends across all POs, newest first, with each PO's number."""
+    stmt = (
+        select(OrderShipstation, PurchaseOrder.po_number)
+        .join(PurchaseOrder, PurchaseOrder.po_id == OrderShipstation.po_id)
+        .order_by(OrderShipstation.sent_at.desc(), OrderShipstation.order_shipstation_id.desc())
+        .limit(limit)
+    )
+    return [(send, po_number) for send, po_number in session.execute(stmt).all()]

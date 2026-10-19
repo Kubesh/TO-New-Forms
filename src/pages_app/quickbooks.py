@@ -6,6 +6,7 @@ from src.db import session_scope
 from src.models import Customer, Item
 from src.services import qbo_sync
 from src.services import quickbooks as qb
+from src.services.categories import category_path
 from src.services.customers import get_customer
 
 QBO_ERRORS = (qb.QuickBooksNotConfigured, qb.QuickBooksNotConnected, qb.QuickBooksError)
@@ -13,6 +14,22 @@ QBO_ERRORS = (qb.QuickBooksNotConfigured, qb.QuickBooksNotConnected, qb.QuickBoo
 
 def _show_error(exc: Exception) -> None:
     st.error(str(exc))
+
+
+HEADER_COLUMNS = [4, 4, 2]
+
+
+def _render_headers() -> None:
+    col_app, col_qbo, _ = st.columns(HEADER_COLUMNS)
+    with col_app:
+        st.markdown("**Operations App**")
+    with col_qbo:
+        st.markdown("**QuickBooks**")
+
+
+def _two_line(title: str, sub: str | None) -> str:
+    small = f'<div style="font-size:0.8rem; opacity:0.65;">{html.escape(sub)}</div>' if sub else ""
+    return f'<div style="font-weight:700;">{html.escape(title)}</div>{small}'
 
 
 def quickbooks_page() -> None:
@@ -239,15 +256,20 @@ def _render_customers() -> None:
         and (show == "All" or (show == "Linked") == (c.customer_id in links))
     ]
     st.caption(f"{len(shown)} customer{'' if len(shown) == 1 else 's'}")
+    _render_headers()
     for customer in shown[:200]:
         link = links.get(customer.customer_id)
-        col_name, col_status, col_btn = st.columns([4, 4, 2], vertical_alignment="center")
+        col_name, col_status, col_btn = st.columns(HEADER_COLUMNS, vertical_alignment="center")
         with col_name:
-            st.write(customer.customer_name)
+            st.markdown(_two_line(customer.customer_name, None), unsafe_allow_html=True)
         with col_status:
-            st.caption(
-                f"QuickBooks: {link.qbo_display_name or link.qbo_customer_id}" if link else "Not linked"
-            )
+            if link:
+                st.markdown(
+                    _two_line(link.qbo_display_name or link.qbo_customer_id, f"#{link.qbo_customer_id}"),
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption("Not linked")
         with col_btn:
             if st.button(
                 "Change" if link else "Link…", width="stretch", key=f"qbo_cust_btn_{customer.customer_id}"
@@ -309,7 +331,16 @@ def _render_items() -> None:
         st.caption(f"{left} SKU{'' if left == 1 else 's'} would still need linking by hand.")
 
     with session_scope() as session:
-        items = qbo_sync.sellable_items(session)
+        items = []
+        for item in qbo_sync.sellable_items(session):
+            below_top = " › ".join(c.name for c in category_path(item.category)[1:])
+            items.append(
+                {
+                    "item_id": item.item_id,
+                    "sku": item.sku,
+                    "title": f"{below_top}: {item.name}" if below_top else item.name,
+                }
+            )
         links = qbo_sync.current_item_links(session)
     search = st.text_input(
         "Filter SKUs", placeholder="Filter by SKU or name…", label_visibility="collapsed", key="qbo_item_filter"
@@ -318,23 +349,28 @@ def _render_items() -> None:
     shown = [
         i
         for i in items
-        if (not search or search in f"{i.sku} {i.name}".lower())
-        and (show == "All" or (show == "Linked") == (i.item_id in links))
+        if (not search or search in f"{i['sku']} {i['title']}".lower())
+        and (show == "All" or (show == "Linked") == (i["item_id"] in links))
     ]
     st.caption(f"{len(shown)} SKU{'' if len(shown) == 1 else 's'}")
+    _render_headers()
     for item in shown[:200]:
-        link = links.get(item.item_id)
-        col_name, col_status, col_btn = st.columns([4, 4, 2], vertical_alignment="center")
+        link = links.get(item["item_id"])
+        col_name, col_status, col_btn = st.columns(HEADER_COLUMNS, vertical_alignment="center")
         with col_name:
-            st.markdown(
-                f"**{html.escape(item.sku)}**  \n{html.escape(item.name)}",
-            )
+            st.markdown(_two_line(item["title"], item["sku"]), unsafe_allow_html=True)
         with col_status:
-            st.caption(f"QuickBooks: {link.qbo_item_name or link.qbo_item_id}" if link else "Not linked")
+            if link:
+                st.markdown(
+                    _two_line(link.qbo_item_name or link.qbo_item_id, f"#{link.qbo_item_id}"),
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption("Not linked")
         with col_btn:
             if st.button(
-                "Change" if link else "Link…", width="stretch", key=f"qbo_item_btn_{item.item_id}"
+                "Change" if link else "Link…", width="stretch", key=f"qbo_item_btn_{item['item_id']}"
             ):
-                link_item_dialog(item.item_id)
+                link_item_dialog(item["item_id"])
     if len(shown) > 200:
         st.caption("Showing the first 200 - use the filter to narrow the list.")

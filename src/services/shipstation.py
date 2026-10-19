@@ -266,3 +266,9 @@ def get_labels_for_order(shipstation_order_id: int) -> list[dict]:
         for shipment in data.get("shipments", [])
         if not shipment.get("voided")
     ]
+
+
+def check_connection() -> list[dict]:
+    """The account's stores - a light call that proves the key/secret work."""
+    data = _request("GET", "/stores")
+    return data if isinstance(data, list) else []

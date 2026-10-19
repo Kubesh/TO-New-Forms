@@ -13,6 +13,7 @@ from src.pages_app.items import items_page
 from src.pages_app.production import production_page
 from src.pages_app.purchase_orders import purchase_orders_page
 from src.pages_app.quickbooks import quickbooks_page
+from src.pages_app.shipstation import shipstation_page
 
 st.set_page_config(
     page_title="Treehouse Originals",
@@ -186,6 +187,14 @@ st.markdown(
         margin-left: 1.1rem;
         font-size: 0.78rem;
     }
+    .tp-sidebar-section {
+        margin: 1.1rem 0 0.25rem 0.5rem;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        opacity: 0.55;
+    }
     .tp-sidebar-brand {
         padding-bottom: 1rem;
         margin-bottom: 0.75rem;
@@ -235,6 +244,7 @@ production = st.Page(production_page, title="Production", url_path="production")
 assemblies = st.Page(assemblies_page, title="Assemblies", url_path="assemblies")
 batches = st.Page(batches_page, title="Batches", url_path="batches")
 quickbooks = st.Page(quickbooks_page, title="QuickBooks", url_path="quickbooks")
+shipstation = st.Page(shipstation_page, title="ShipStation", url_path="shipstation")
 
 # Build the nav ourselves (position="hidden") so the sidebar always renders,
 # rather than relying on Streamlit's auto nav widget, which hides itself
@@ -253,7 +263,7 @@ nav_sections = {
     "Purchase Orders": [purchase_orders],
     "Inventory": [inventory, categories],
     "Items": [items],
-    "QuickBooks": [quickbooks],
+    "Integrations": [quickbooks, shipstation],
 }
 if show_production:
     nav_sections["Production"] = [production, assemblies, batches]
@@ -282,7 +292,9 @@ with st.sidebar:
     with st.container(key="tp-sidebar-subnav"):
         st.page_link(categories, label="Categories")
     st.page_link(items, label="Items")
+    st.markdown('<div class="tp-sidebar-section">Integrations</div>', unsafe_allow_html=True)
     st.page_link(quickbooks, label="QuickBooks")
+    st.page_link(shipstation, label="ShipStation")
     if show_production:
         st.page_link(production, label="Production")
         with st.container(key="tp-sidebar-subnav-production"):
