@@ -73,11 +73,11 @@ def render_pricing(
 ) -> None:
     """key must be unique per scope on the page (it namespaces widget state)."""
     if customer_id is not None:
-        own_label, who = "Customer price", "this customer"
+        own_label = "Customer price"
     elif customer_type_id is not None:
-        own_label, who = "Type price", "this customer type"
+        own_label = "Type price"
     else:
-        own_label, who = "Default price", "customers with no price of their own"
+        own_label = "Default price"
     scope = {"customer_type_id": customer_type_id, "customer_id": customer_id}
 
     # Staged edits belong to one scope; arriving at a different one drops them.
@@ -130,16 +130,19 @@ def render_pricing(
                     st.session_state[PENDING_EXCL] = {}
                     st.rerun()
 
-    st.caption(
-        f"Per-case prices for {who}. The price shown is what a new purchase order line gets "
-        "(a yellow row has an unsaved change). Changes apply to purchase orders entered from "
-        "now on - existing POs keep the price they were entered at."
-        + (
-            f" A line marked \"Not sold\" can't be added to purchase orders for this {who_short}."
-            if can_exclude
-            else ""
+    if customer_id is not None:
+        intro = (
+            "Per-case prices for this customer. These are used on their POs instead of "
+            "their customer type's pricing."
         )
-    )
+    elif customer_type_id is not None:
+        intro = (
+            "Per-case prices for this customer type. A customer's pricing on a PO will be "
+            "set to this unless the customer has custom pricing set."
+        )
+    else:
+        intro = "Per-case prices for customers with no pricing of their own."
+    st.caption(f"{intro} You can set the pricing by the line or by the individual SKU.")
     tab_line, tab_sku = st.tabs(["Line", "SKU"])
 
     with tab_line:
