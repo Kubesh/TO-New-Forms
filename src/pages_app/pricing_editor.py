@@ -19,17 +19,23 @@ ACTIVE_SCOPE = "pricing_active_scope"
 PRICING_CSS = """
 <style>
 [class*="st-key-pricerow-"] {
-    border: 2px solid #1A1712;
-    border-radius: 0.625rem;
-    padding: 0.6rem 0.9rem 0.7rem;
-    margin-bottom: 0.4rem;
+    border-bottom: 1px solid rgba(26, 23, 18, 0.18);
+    padding: 0.3rem 0.5rem 0.5rem;
+    gap: 0;
+    margin-bottom: -0.55rem;
+}
+[class*="st-key-pricerow-"] [data-testid="stHorizontalBlock"] { gap: 0.5rem; }
+[class*="st-key-pricerow-"] button {
+    min-height: 1.9rem;
+    height: 1.9rem;
+    padding: 0 0.6rem;
 }
 [class*="st-key-pricerow-changed-"] { background: #FFF2A8; }
-.price-row-name { font-weight: 700; }
-.price-row-sub { font-size: 0.8rem; opacity: 0.65; line-height: 1.4; }
-.price-row-amount { font-size: 1.1rem; font-weight: 700; text-align: right; }
+.price-row-name { font-weight: 700; line-height: 1.3; }
+.price-row-sub { font-size: 0.78rem; opacity: 0.65; line-height: 1.25; }
+.price-row-amount { font-size: 1rem; line-height: 1.3; font-weight: 700; text-align: right; }
 .price-row-badge {
-    display: block; text-align: right; font-size: 0.7rem; opacity: 0.65; line-height: 1.4;
+    display: block; text-align: right; font-size: 0.7rem; opacity: 0.65; line-height: 1.2;
     text-transform: uppercase; letter-spacing: 0.04em;
 }
 .st-key-pricing-savebar {
