@@ -249,3 +249,54 @@ def list_contacts(session: Session, customer_id: int) -> list[CustomerContact]:
         .order_by(CustomerContact.contact_name)
     )
     return list(session.scalars(stmt).all())
+
+
+def get_customer_type(session: Session, customer_type_id: int) -> CustomerType | None:
+    return session.get(CustomerType, customer_type_id)
+
+
+def customer_counts_by_type(session: Session) -> dict[int | None, int]:
+    """Active customers per customer type id (None = customers with no type)."""
+    rows = session.execute(
+        select(Customer.customer_type_id, func.count())
+        .where(Customer.archived.is_(False))
+        .group_by(Customer.customer_type_id)
+    )
+    return {type_id: count for type_id, count in rows}
+
+
+def _check_customer_type_name(session: Session, name: str, exclude_id: int | None = None) -> str:
+    name = name.strip()
+    if not name:
+        raise ValueError("Name is required.")
+    clash = select(CustomerType.customer_type_id).where(
+        func.lower(CustomerType.name) == name.lower()
+    )
+    if exclude_id is not None:
+        clash = clash.where(CustomerType.customer_type_id != exclude_id)
+    if session.scalar(clash) is not None:
+        raise ValueError("A customer type with that name already exists.")
+    return name
+
+
+def create_customer_type(session: Session, name: str, notes: str | None = None) -> CustomerType:
+    customer_type = CustomerType(
+        name=_check_customer_type_name(session, name), notes=(notes or "").strip() or None
+    )
+    session.add(customer_type)
+    session.commit()
+    session.refresh(customer_type)
+    return customer_type
+
+
+def update_customer_type(
+    session: Session, customer_type_id: int, name: str, notes: str | None = None
+) -> CustomerType | None:
+    customer_type = session.get(CustomerType, customer_type_id)
+    if customer_type is None:
+        return None
+    customer_type.name = _check_customer_type_name(session, name, exclude_id=customer_type_id)
+    customer_type.notes = (notes or "").strip() or None
+    session.commit()
+    session.refresh(customer_type)
+    return customer_type

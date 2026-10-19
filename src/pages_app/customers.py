@@ -1,8 +1,6 @@
 import html
 import logging
-from decimal import Decimal
 
-import pandas as pd
 import streamlit as st
 
 from src.db import session_scope
@@ -22,8 +20,8 @@ from src.services.customers import (
     search_customers,
     update_customer,
 )
+from src.pages_app.pricing_editor import render_pricing
 from src.pages_app.purchase_orders import create_po_dialog, render_po_table
-from src.services.pricing import SOURCE_LABELS, customer_price_rows, set_prices
 from src.services.order_types import list_order_type_choices
 from src.services.purchase_orders import (
     get_non_voided_po_counts,
@@ -396,117 +394,46 @@ def _render_detail(customer_id: int) -> None:
     if customer.store_key is not None:
         st.caption(f"Previous store key: {customer.store_key}")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Billing")
-        _render_address(customer, "billing")
-    with col2:
-        st.subheader("Shipping")
-        _render_address(customer, "shipping")
+    tab_details, tab_pricing = st.tabs(["Details", "Pricing"])
+    with tab_details:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Billing")
+            _render_address(customer, "billing")
+        with col2:
+            st.subheader("Shipping")
+            _render_address(customer, "shipping")
 
-    st.subheader("Contacts")
-    if customer.contacts:
-        for contact in customer.contacts:
-            with st.container(border=True):
-                st.write(f"**{contact.contact_name}**")
-                if contact.contact_phone:
-                    st.write(contact.contact_phone)
-                if contact.contact_notes:
-                    st.caption(contact.contact_notes)
-    else:
-        st.write("No contacts on file.")
+        st.subheader("Contacts")
+        if customer.contacts:
+            for contact in customer.contacts:
+                with st.container(border=True):
+                    st.write(f"**{contact.contact_name}**")
+                    if contact.contact_phone:
+                        st.write(contact.contact_phone)
+                    if contact.contact_notes:
+                        st.caption(contact.contact_notes)
+        else:
+            st.write("No contacts on file.")
 
-    if customer.children:
-        st.subheader("Sub-accounts")
-        for child in customer.children:
-            st.write(f"- {child.customer_name}")
+        if customer.children:
+            st.subheader("Sub-accounts")
+            for child in customer.children:
+                st.write(f"- {child.customer_name}")
 
-    with st.expander("Pricing"):
-        _render_customer_pricing(customer)
+        col_po_header, col_po_create = st.columns([3, 1])
+        with col_po_header:
+            st.subheader("Purchase Orders")
+        with col_po_create:
+            if st.button("Create purchase order", width="stretch", key="create_po_btn"):
+                create_po_dialog(customer.customer_id)
+        if purchase_orders:
+            render_po_table(purchase_orders, po_stats, href_base="/purchase-orders")
+        else:
+            st.write("No purchase orders on file.")
 
-    col_po_header, col_po_create = st.columns([3, 1])
-    with col_po_header:
-        st.subheader("Purchase Orders")
-    with col_po_create:
-        if st.button("Create purchase order", width="stretch", key="create_po_btn"):
-            create_po_dialog(customer.customer_id)
-    if purchase_orders:
-        render_po_table(purchase_orders, po_stats, href_base="/purchase-orders")
-    else:
-        st.write("No purchase orders on file.")
-
-
-def _render_customer_pricing(customer) -> None:
-    """This customer's own per-case prices. Anything left empty falls back to
-    their parent account's price, then their customer type's, then the default
-    (all set on the Pricing page)."""
-    st.caption(
-        "Set a price here only where this customer's price differs from what they'd "
-        "otherwise get. Empty = no price of their own. Applies to purchase orders "
-        "entered from now on."
-    )
-    with session_scope() as session:
-        rows = customer_price_rows(session, customer.customer_id)
-    if not rows:
-        st.write("No sellable items yet.")
-        return
-
-    frame = pd.DataFrame(
-        [
-            {
-                "SKU": r["sku"],
-                "Item": r["name"],
-                "Customer price": float(r["override"]) if r["override"] is not None else None,
-                "Current price": float(r["effective"]) if r["effective"] is not None else None,
-                "From": SOURCE_LABELS.get(r["source"], "No price"),
-            }
-            for r in rows
-        ]
-    )
-    version_key = f"customer_pricing_version_{customer.customer_id}"
-    version = st.session_state.get(version_key, 0)
-    edited = st.data_editor(
-        frame,
-        hide_index=True,
-        width="stretch",
-        disabled=["SKU", "Item", "Current price", "From"],
-        column_config={
-            "Customer price": st.column_config.NumberColumn(
-                "Customer price", min_value=0.0, step=0.01, format="$%.2f"
-            ),
-            "Current price": st.column_config.NumberColumn("Current price", format="$%.2f"),
-        },
-        key=f"customer_pricing_{customer.customer_id}_{version}",
-    )
-
-    def blank(value):
-        return value is None or pd.isna(value)
-
-    changes = []
-    for index, row in enumerate(rows):
-        old, new = frame.iloc[index]["Customer price"], edited.iloc[index]["Customer price"]
-        if blank(old) and blank(new):
-            continue
-        if not blank(old) and not blank(new) and round(float(old), 4) == round(float(new), 4):
-            continue
-        changes.append(
-            {
-                "item_id": row["item_id"],
-                "price": None if blank(new) else Decimal(str(new)),
-                "customer_id": customer.customer_id,
-            }
-        )
-    if st.button(
-        "Save customer prices",
-        type="primary",
-        disabled=not changes,
-        key=f"save_customer_prices_{customer.customer_id}",
-    ):
-        with session_scope() as session:
-            set_prices(session, changes)
-        st.session_state[version_key] = version + 1
-        st.toast("Customer prices saved.")
-        st.rerun()
+    with tab_pricing:
+        render_pricing(customer_id=customer.customer_id, key=f"pricing_customer_{customer.customer_id}")
 
 
 def _render_address(customer, prefix: str) -> None:

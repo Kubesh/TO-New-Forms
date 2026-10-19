@@ -5,16 +5,20 @@ import streamlit as st
 from src.db import session_scope
 from src.pages_app.category_colors import category_color
 from src.services.categories import (
+    LEVEL_LABELS,
+    MAX_DEPTH,
+    category_path,
+    descendant_ids,
     list_subcategories,
     list_top_level_categories,
-    subcategory_name,
-    top_level_category_name,
 )
 from src.services.inventory import get_last_count, list_counts_for_item
 from src.services.items import count_items, get_item, search_items, update_item
 from src.services.purchase_orders import list_line_items_for_item
 
 PAGE_SIZE = 25
+
+ALL_LABELS = {1: "All categories", 2: "All subcategories", 3: "All form factors"}
 
 ITEM_CARD_CSS = """
 <style>
@@ -101,50 +105,57 @@ def _format_counted(counted) -> str:
 
 
 def category_subcategory_picker(session, current_category, key_prefix: str) -> int | None:
-    """Renders a top-level-category selectbox plus a subcategory selectbox
-    scoped to whichever top-level category is chosen, and returns the
-    category_id that should end up on the item (the subcategory's id if
-    one's picked, else the top-level category's id, else None)."""
-    top_level = list_top_level_categories(session)
-    top_options = ["No category"] + [c.name for c in top_level]
-    top_by_name = {c.name: c for c in top_level}
+    """Renders a selectbox per category level (category, subcategory, form
+    factor), each scoped to whatever is chosen above it, and returns the
+    category_id that should end up on the item - the deepest level picked,
+    or None if no category is."""
+    path = category_path(current_category)
+    parent_id = None
+    chosen_id = None
+    columns = st.columns(MAX_DEPTH)
+    for level in range(1, MAX_DEPTH + 1):
+        label = LEVEL_LABELS[level]
+        none_label = "No category" if level == 1 else f"No {label.lower()}"
+        if level == 1:
+            options = list_top_level_categories(session)
+        elif chosen_id is not None:
+            options = list_subcategories(session, chosen_id)
+        else:
+            options = []
+        names = [none_label] + [c.name for c in options]
+        by_name = {c.name: c for c in options}
 
-    current_top = top_level_category_name(current_category)
-    current_sub = subcategory_name(current_category)
-    top_index = top_options.index(current_top) if current_top in top_options else 0
-
-    col1, col2 = st.columns(2)
-    with col1:
-        top_choice = st.selectbox(
-            "Category", top_options, index=top_index, key=f"{key_prefix}category"
-        )
-
-    if top_choice == "No category":
-        with col2:
-            st.selectbox(
-                "Subcategory", ["No subcategory"], disabled=True, key=f"{key_prefix}subcategory_none"
+        # The item's current value is only the default while the levels above
+        # still match its path; keying on the parent means switching a higher
+        # level always resets this one instead of carrying over a value that
+        # may not exist in the new parent's list.
+        on_path = len(path) >= level and (level == 1 or path[level - 2].category_id == chosen_id)
+        index = names.index(path[level - 1].name) if on_path and path[level - 1].name in names else 0
+        with columns[level - 1]:
+            choice = st.selectbox(
+                label,
+                names,
+                index=index,
+                disabled=chosen_id is None and level > 1,
+                key=f"{key_prefix}level{level}_{chosen_id}",
             )
-        return None
-
-    chosen_top = top_by_name[top_choice]
-    subcategories = list_subcategories(session, chosen_top.category_id)
-    sub_options = ["No subcategory"] + [s.name for s in subcategories]
-    sub_by_name = {s.name: s for s in subcategories}
-    # Keying on the chosen top-level category means switching categories
-    # always resets to "No subcategory" instead of carrying over a value
-    # that may not exist in the new category's list.
-    sub_index = sub_options.index(current_sub) if current_sub in sub_options else 0
-    with col2:
-        sub_choice = st.selectbox(
-            "Subcategory",
-            sub_options,
-            index=sub_index,
-            key=f"{key_prefix}subcategory_{top_choice}",
-        )
-
-    if sub_choice != "No subcategory":
-        return sub_by_name[sub_choice].category_id
-    return chosen_top.category_id
+        if choice == none_label:
+            # Nothing picked at this level: the deeper ones stay empty.
+            chosen_here = None
+        else:
+            chosen_here = by_name[choice].category_id
+        if chosen_here is None:
+            for deeper in range(level + 1, MAX_DEPTH + 1):
+                with columns[deeper - 1]:
+                    st.selectbox(
+                        LEVEL_LABELS[deeper],
+                        [f"No {LEVEL_LABELS[deeper].lower()}"],
+                        disabled=True,
+                        key=f"{key_prefix}level{deeper}_none",
+                    )
+            break
+        chosen_id = chosen_here
+    return chosen_id
 
 
 def items_page() -> None:
@@ -164,61 +175,52 @@ def items_page() -> None:
 def _render_list() -> None:
     st.title("Items")
 
-    try:
-        with session_scope() as session:
-            top_level = list_top_level_categories(session)
-    except RuntimeError as exc:
-        st.error(str(exc))
-        return
-
-    col_search, col_category, col_sellable = st.columns([2, 1, 1])
+    col_search, col_sellable = st.columns([3, 1])
     with col_search:
         query = st.text_input(
             "Search items",
             placeholder="Search by name or SKU…",
             label_visibility="collapsed",
         )
-    with col_category:
-        category_names = ["All categories"] + [c.name for c in top_level]
-        category_choice = st.selectbox("Category", category_names)
     with col_sellable:
-        st.markdown("<div style='height: 1.85rem'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 0.4rem'></div>", unsafe_allow_html=True)
         sellable_only = st.checkbox("Sellable only")
-
-    top_by_name = {c.name: c for c in top_level}
-    chosen_top = top_by_name.get(category_choice)
     sellable = True if sellable_only else None
 
-    # Subcategory only makes sense once a category is picked - without one,
-    # subcategory names from unrelated categories would be mixed together.
-    subcategory_choice = "All subcategories"
-    subcategories = []
-    if chosen_top:
-        try:
-            with session_scope() as session:
-                subcategories = list_subcategories(session, chosen_top.category_id)
-        except RuntimeError as exc:
-            st.error(str(exc))
-            return
-
-        # Keying the subcategory picker on the current category means picking
-        # a new category always starts it fresh at "All subcategories" instead
-        # of carrying over a value that may not exist in the new category's
-        # list (which would otherwise crash - Streamlit rejects a selectbox
-        # whose session-state value isn't in its current options).
-        subcategory_choice = st.selectbox(
-            "Subcategory",
-            ["All subcategories"] + [s.name for s in subcategories],
-            key=f"items_subcategory_{category_choice}",
-        )
-
-    category_ids = None
-    if chosen_top:
-        if subcategory_choice != "All subcategories":
-            sub_by_name = {s.name: s for s in subcategories}
-            category_ids = [sub_by_name[subcategory_choice].category_id]
-        else:
-            category_ids = [chosen_top.category_id] + [s.category_id for s in subcategories]
+    # One filter per category level, each only offered once the level above
+    # is picked - without that, names from unrelated categories would be mixed.
+    # Keying each on its parent means picking a new parent starts the next
+    # level fresh at "All" instead of carrying over a value that may not exist
+    # in the new parent's list (which would crash - Streamlit rejects a
+    # selectbox whose session-state value isn't in its current options).
+    chosen_id = None
+    try:
+        with session_scope() as session:
+            columns = st.columns(MAX_DEPTH)
+            for level in range(1, MAX_DEPTH + 1):
+                if level == 1:
+                    options = list_top_level_categories(session)
+                elif chosen_id is not None:
+                    options = list_subcategories(session, chosen_id)
+                else:
+                    break
+                if not options and level > 1:
+                    break
+                all_label = ALL_LABELS[level]
+                with columns[level - 1]:
+                    choice = st.selectbox(
+                        LEVEL_LABELS[level],
+                        [all_label] + [c.name for c in options],
+                        key=f"items_filter_level{level}_{chosen_id}",
+                    )
+                picked = next((c for c in options if c.name == choice), None)
+                if picked is None:
+                    break
+                chosen_id = picked.category_id
+            category_ids = descendant_ids(session, chosen_id) if chosen_id is not None else None
+    except RuntimeError as exc:
+        st.error(str(exc))
+        return
 
     filters_key = (query, tuple(category_ids) if category_ids else None, sellable)
     if st.session_state.get("item_filters_key") != filters_key:
@@ -286,10 +288,7 @@ def _card_html(item) -> str:
     color = category_color(item.category)
     name = html.escape(item.name)
     sku = html.escape(item.sku)
-    subcategory_bits = [
-        b for b in [top_level_category_name(item.category), subcategory_name(item.category)] if b
-    ]
-    subcategory_line = html.escape(" / ".join(subcategory_bits)) if subcategory_bits else ""
+    subcategory_line = html.escape(" / ".join(c.name for c in category_path(item.category)))
 
     tags = []
     if not item.sellable:
@@ -334,10 +333,8 @@ def _render_detail(item_id: int) -> None:
     st.caption(item.sku)
     st.header(item.name)
 
-    subcategory_bits = [
-        b for b in [top_level_category_name(item.category), subcategory_name(item.category)] if b
-    ]
-    st.write(" / ".join(subcategory_bits) if subcategory_bits else "No category")
+    path_names = [c.name for c in category_path(item.category)]
+    st.write(" / ".join(path_names) if path_names else "No category")
 
     if not item.sellable:
         st.badge("Not sellable", color="red")

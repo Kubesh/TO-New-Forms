@@ -9,6 +9,10 @@ class Base(DeclarativeBase):
     pass
 
 
+# Category > subcategory > form factor (enforced in src/services/categories.py).
+MAX_CATEGORY_DEPTH = 3
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -162,14 +166,16 @@ class PurchaseOrderLineItem(Base, TimestampMixin):
 
 
 class ItemPrice(Base, TimestampMixin):
-    """A per-case price for an item. Scope is a customer (their own price), a
+    """A per-case price, for one item (a SKU) or for a category (a line or form
+    factor - every item under it). Scope is a customer (their own price), a
     customer type (every customer of that type), or neither (the default)."""
 
     __tablename__ = "item_prices"
 
     item_price_id: Mapped[int] = mapped_column(primary_key=True)
-    item_id: Mapped[int] = mapped_column(
-        ForeignKey("items.item_id", ondelete="CASCADE"), nullable=False
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("items.item_id", ondelete="CASCADE"))
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("categories.category_id", ondelete="CASCADE")
     )
     customer_type_id: Mapped[int | None] = mapped_column(
         ForeignKey("customer_types.customer_type_id", ondelete="CASCADE")
@@ -259,9 +265,8 @@ class OrderShippingMaterial(Base, TimestampMixin):
 
 
 class Category(Base, TimestampMixin):
-    """Both top-level categories and subcategories live in this one table -
-    a subcategory is just a row whose parent_id points at its parent
-    category's row. color is only really meaningful for top-level rows
+    """Categories, subcategories (lines) and form factors all live in this one
+    table - each is just a row whose parent_id points at its parent's row. color is only really meaningful for top-level rows
     (it drives the card-indicator color everywhere categories are shown)
     but isn't restricted at the schema level."""
 
@@ -272,8 +277,15 @@ class Category(Base, TimestampMixin):
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("categories.category_id"))
     color: Mapped[str | None] = mapped_column(String(20))
 
+    # Eager (joined), so the whole ancestor chain is available after the
+    # session closes, whichever way the Category itself was loaded.
     parent: Mapped["Category | None"] = relationship(
-        remote_side="Category.category_id", back_populates="subcategories"
+        remote_side="Category.category_id",
+        back_populates="subcategories",
+        lazy="joined",
+        # One past the top level, so a top-level row's own parent (None) is
+        # loaded too rather than left to lazy-load after the session closes.
+        join_depth=MAX_CATEGORY_DEPTH + 1,
     )
     subcategories: Mapped[list["Category"]] = relationship(back_populates="parent")
 

@@ -6,10 +6,10 @@ import streamlit as st
 from src.pages_app.assemblies import assemblies_page
 from src.pages_app.batches import batches_page
 from src.pages_app.categories import categories_page
+from src.pages_app.customer_types import customer_types_page
 from src.pages_app.customers import customers_page
 from src.pages_app.inventory import inventory_page
 from src.pages_app.items import items_page
-from src.pages_app.pricing import pricing_page
 from src.pages_app.production import production_page
 from src.pages_app.purchase_orders import purchase_orders_page
 
@@ -221,13 +221,15 @@ st.markdown(
 )
 
 customers = st.Page(customers_page, title="Customers", url_path="customers", default=True)
+customer_types = st.Page(
+    customer_types_page, title="Customer Types", url_path="customer-types"
+)
 purchase_orders = st.Page(
     purchase_orders_page, title="Purchase Orders", url_path="purchase-orders"
 )
 inventory = st.Page(inventory_page, title="Inventory", url_path="inventory")
 categories = st.Page(categories_page, title="Categories", url_path="categories")
 items = st.Page(items_page, title="Items", url_path="items")
-pricing = st.Page(pricing_page, title="Pricing", url_path="pricing")
 production = st.Page(production_page, title="Production", url_path="production")
 assemblies = st.Page(assemblies_page, title="Assemblies", url_path="assemblies")
 batches = st.Page(batches_page, title="Batches", url_path="batches")
@@ -245,10 +247,10 @@ show_production = os.environ.get("SHOW_PRODUCTION", "").strip().lower() in (
 )
 
 nav_sections = {
-    "Customers": [customers],
+    "Customers": [customers, customer_types],
     "Purchase Orders": [purchase_orders],
     "Inventory": [inventory, categories],
-    "Items": [items, pricing],
+    "Items": [items],
 }
 if show_production:
     nav_sections["Production"] = [production, assemblies, batches]
@@ -270,13 +272,13 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.page_link(customers, label="Customers")
+    with st.container(key="tp-sidebar-subnav-customers"):
+        st.page_link(customer_types, label="Customer Types")
     st.page_link(purchase_orders, label="Purchase Orders")
     st.page_link(inventory, label="Inventory")
     with st.container(key="tp-sidebar-subnav"):
         st.page_link(categories, label="Categories")
     st.page_link(items, label="Items")
-    with st.container(key="tp-sidebar-subnav-items"):
-        st.page_link(pricing, label="Pricing")
     if show_production:
         st.page_link(production, label="Production")
         with st.container(key="tp-sidebar-subnav-production"):

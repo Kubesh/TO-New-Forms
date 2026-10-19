@@ -4,6 +4,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from src.models import Customer, Item, PurchaseOrder, PurchaseOrderLineItem
+from src.services.categories import load_category_chain
 from src.services.pricing import resolve_price
 
 
@@ -75,9 +76,11 @@ def get_purchase_order(session: Session, po_id: int) -> PurchaseOrder | None:
         .options(
             joinedload(PurchaseOrder.customer).joinedload(Customer.customer_type),
             joinedload(PurchaseOrder.customer).joinedload(Customer.default_order_type),
-            joinedload(PurchaseOrder.line_items)
-            .joinedload(PurchaseOrderLineItem.item)
-            .joinedload(Item.category),
+            load_category_chain(
+                joinedload(PurchaseOrder.line_items)
+                .joinedload(PurchaseOrderLineItem.item)
+                .joinedload(Item.category)
+            ),
         )
         .where(PurchaseOrder.po_id == po_id)
     )
