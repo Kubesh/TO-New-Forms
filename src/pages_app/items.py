@@ -7,6 +7,7 @@ from src.pages_app.category_colors import category_color
 from src.services.categories import (
     LEVEL_LABELS,
     MAX_DEPTH,
+    SELLABLE_CATEGORY_NAME,
     category_path,
     descendant_ids,
     list_subcategories,
@@ -112,8 +113,11 @@ def category_subcategory_picker(session, current_category, key_prefix: str) -> i
     path = category_path(current_category)
     parent_id = None
     chosen_id = None
+    root_name = None
     columns = st.columns(MAX_DEPTH)
     for level in range(1, MAX_DEPTH + 1):
+        if level == MAX_DEPTH and root_name != SELLABLE_CATEGORY_NAME:
+            break  # form factors only exist under Sellable Product
         label = LEVEL_LABELS[level]
         none_label = "No category" if level == 1 else f"No {label.lower()}"
         if level == 1:
@@ -146,6 +150,8 @@ def category_subcategory_picker(session, current_category, key_prefix: str) -> i
             chosen_here = by_name[choice].category_id
         if chosen_here is None:
             for deeper in range(level + 1, MAX_DEPTH + 1):
+                if deeper == MAX_DEPTH and root_name != SELLABLE_CATEGORY_NAME:
+                    break
                 with columns[deeper - 1]:
                     st.selectbox(
                         LEVEL_LABELS[deeper],
@@ -155,6 +161,8 @@ def category_subcategory_picker(session, current_category, key_prefix: str) -> i
                     )
             break
         chosen_id = chosen_here
+        if level == 1:
+            root_name = choice
     return chosen_id
 
 
@@ -197,7 +205,10 @@ def _render_list() -> None:
     try:
         with session_scope() as session:
             columns = st.columns(MAX_DEPTH)
+            root_name = None
             for level in range(1, MAX_DEPTH + 1):
+                if level == MAX_DEPTH and root_name != SELLABLE_CATEGORY_NAME:
+                    break  # form factors only exist under Sellable Product
                 if level == 1:
                     options = list_top_level_categories(session)
                 elif chosen_id is not None:
@@ -217,6 +228,8 @@ def _render_list() -> None:
                 if picked is None:
                     break
                 chosen_id = picked.category_id
+                if level == 1:
+                    root_name = picked.name
             category_ids = descendant_ids(session, chosen_id) if chosen_id is not None else None
     except RuntimeError as exc:
         st.error(str(exc))

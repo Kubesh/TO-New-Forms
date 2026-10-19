@@ -6,12 +6,11 @@ from sqlalchemy.exc import IntegrityError
 
 from src.db import session_scope
 from src.services.categories import (
-    LEVEL_LABELS,
-    MAX_DEPTH,
-    category_depth,
+    SELLABLE_CATEGORY_NAME,
     category_path,
     create_category,
     get_category,
+    is_sellable_root,
     list_items_in_category,
     list_subcategories,
     list_top_level_categories,
@@ -116,17 +115,10 @@ def _render_list() -> None:
     )
 
 
-def _child_count_label(depth: int, count: int) -> str:
-    """How a category at this depth counts its children."""
-    if depth == 1:
-        return f"{count} subcategor{'y' if count == 1 else 'ies'}"
-    return f"{count} form factor{'' if count == 1 else 's'}"
-
-
-def _card_html(category, subcategory_count: int, depth: int = 1, color: str | None = None) -> str:
+def _card_html(category, subcategory_count: int) -> str:
     name = html.escape(category.name)
-    color = color or category.color or "#1A1712"
-    count_label = _child_count_label(depth, subcategory_count) if depth < MAX_DEPTH else ""
+    color = category.color or "#1A1712"
+    count_label = f"{subcategory_count} subcategor{'y' if subcategory_count == 1 else 'ies'}"
     return (
         f'<a class="cat-card-link" href="?category_id={category.category_id}" target="_self">'
         f'<div class="cat-card" style="--cat-color: {color};">'
@@ -147,65 +139,93 @@ def _render_detail(category_id: int) -> None:
                     st.query_params.clear()
                     st.rerun()
                 return
-            path = category_path(category)
-            depth = len(path)
-            children = list_subcategories(session, category_id)
-            child_counts = {
-                child.category_id: len(list_subcategories(session, child.category_id))
-                for child in children
-            }
-            items = list_items_in_category(session, category_id)
+            # Subcategories and form factors live in tabs on their top-level
+            # category's page, so an old link to one lands there.
+            root = category_path(category)[0]
+            subcategories = list_subcategories(session, root.category_id)
+            sellable = is_sellable_root(root)
+            all_items = list_items_in_category(session, root.category_id)
+            per_sub = {}
+            for sub in subcategories:
+                form_factors = list_subcategories(session, sub.category_id) if sellable else []
+                per_sub[sub.category_id] = (
+                    list_items_in_category(session, sub.category_id),
+                    form_factors,
+                    {
+                        ff.category_id: list_items_in_category(session, ff.category_id)
+                        for ff in form_factors
+                    },
+                )
     except RuntimeError as exc:
         st.error(str(exc))
         return
 
-    parent = path[-2] if depth > 1 else None
     col_back, col_edit = st.columns([3, 1])
     with col_back:
-        if st.button(f"← Back to {parent.name}" if parent else "← Back to list"):
-            if parent:
-                st.query_params["category_id"] = str(parent.category_id)
-            else:
-                st.query_params.clear()
+        if st.button("← Back to list"):
+            st.query_params.clear()
             st.rerun()
     with col_edit:
-        if st.button(f"Edit {LEVEL_LABELS[depth].lower()}", width="stretch"):
-            edit_category_dialog(category_id)
+        if st.button("Edit category", width="stretch", disabled=sellable):
+            edit_category_dialog(root.category_id)
 
-    color = path[0].color or "#1A1712"
+    color = root.color or "#1A1712"
     st.markdown(
         f'<span class="cat-swatch" style="display:inline-block; width:1rem; height:1rem; '
         f'border-radius:999px; border:1px solid rgba(26,23,18,0.3); '
         f'background:{color}; margin-right:0.5rem; vertical-align:middle;"></span>'
-        f'<span style="font-size:1.6rem; font-weight:800;">{html.escape(category.name)}</span>',
+        f'<span style="font-size:1.6rem; font-weight:800;">{html.escape(root.name)}</span>',
         unsafe_allow_html=True,
     )
-    st.caption(" › ".join(c.name for c in path) + f"  ·  {LEVEL_LABELS[depth]}")
+    if sellable:
+        st.caption(
+            f"{SELLABLE_CATEGORY_NAME} is locked - it can't be renamed. Add subcategories "
+            "(lines) here and form factors inside each one; pricing is set on these."
+        )
 
-    if depth < MAX_DEPTH:
-        child_label = LEVEL_LABELS[depth + 1]
-        if st.button(f"+ Add {child_label.lower()}", key="cat_add_child"):
-            add_category_dialog(
-                parent_id=category.category_id,
-                parent_name=category.name,
-                child_label=child_label,
-            )
-        if children:
-            cards = "".join(
-                _card_html(child, child_counts[child.category_id], depth + 1, color)
-                for child in children
-            )
-            st.markdown(
-                f'{CATEGORY_CARD_CSS}<div class="cat-card-list">{cards}</div>',
-                unsafe_allow_html=True,
-            )
+    if st.button("+ Add subcategory", key="cat_add_sub"):
+        add_category_dialog(parent_id=root.category_id, parent_name=root.name)
 
-    if depth == 2 and children:
-        with st.expander("Assign items to form factors"):
-            _render_form_factor_assignment(category, children, items)
+    tabs = st.tabs(["All items"] + [sub.name for sub in subcategories])
+    with tabs[0]:
+        _render_item_list(all_items, show_subcategory=True)
 
-    st.subheader(f"Items ({len(items)})")
-    _render_item_list(items, show_subcategory=depth < MAX_DEPTH)
+    for sub, tab in zip(subcategories, tabs[1:]):
+        sub_items, form_factors, ff_items = per_sub[sub.category_id]
+        with tab:
+            col_edit_sub, col_add_ff = st.columns(2)
+            with col_edit_sub:
+                if st.button(
+                    "Edit subcategory", width="stretch", key=f"cat_edit_btn_{sub.category_id}"
+                ):
+                    edit_category_dialog(sub.category_id)
+            if sellable:
+                with col_add_ff:
+                    if st.button(
+                        "+ Add form factor", width="stretch", key=f"cat_add_ff_{sub.category_id}"
+                    ):
+                        add_category_dialog(
+                            parent_id=sub.category_id,
+                            parent_name=sub.name,
+                            child_label="Form factor",
+                        )
+
+            if not form_factors:
+                _render_item_list(sub_items, show_subcategory=False)
+                continue
+
+            ff_tabs = st.tabs(["All items"] + [ff.name for ff in form_factors])
+            with ff_tabs[0]:
+                with st.expander("Assign items to form factors"):
+                    _render_form_factor_assignment(sub, form_factors, sub_items)
+                _render_item_list(sub_items, show_subcategory=True)
+            for ff, ff_tab in zip(form_factors, ff_tabs[1:]):
+                with ff_tab:
+                    if st.button(
+                        "Edit form factor", key=f"cat_edit_btn_{ff.category_id}"
+                    ):
+                        edit_category_dialog(ff.category_id)
+                    _render_item_list(ff_items[ff.category_id], show_subcategory=False)
 
 
 def _render_form_factor_assignment(line, form_factors, items) -> None:
@@ -346,8 +366,12 @@ def edit_category_dialog(category_id: int) -> None:
                             name=name.strip(),
                             color=color if is_top_level else category.color,
                         )
-                except IntegrityError:
-                    st.error("A category with that name already exists here.")
+                except (ValueError, IntegrityError) as exc:
+                    st.error(
+                        str(exc)
+                        if isinstance(exc, ValueError)
+                        else "A category with that name already exists here."
+                    )
                 else:
                     st.rerun()
     with col_cancel:

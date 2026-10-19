@@ -25,6 +25,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from src.models import Category, Customer, Item, ItemPrice
+from src.services.categories import SELLABLE_CATEGORY_NAME
 
 CENT = Decimal("0.01")
 PRICE_PLACES = Decimal("0.0001")
@@ -85,6 +86,12 @@ def _category_maps(session: Session):
     names = {category_id: name for category_id, name, _ in rows}
     parents = {category_id: parent_id for category_id, _, parent_id in rows}
     return names, parents
+
+
+def _sellable_category_ids(names: dict, parents: dict) -> set[int]:
+    """Every category under the Sellable Product category (not itself)."""
+    roots = {c for c, n in names.items() if n == SELLABLE_CATEGORY_NAME and parents[c] is None}
+    return {c for c in names if c not in roots and set(_chain(parents, c)) & roots}
 
 
 def _chain(parents: dict, category_id: int | None) -> list[int]:
@@ -283,15 +290,15 @@ def set_prices(session: Session, changes: list[dict]) -> None:
 def line_price_rows(
     session: Session, *, customer_type_id: int | None = None, customer_id: int | None = None
 ) -> list[dict]:
-    """For the Line tab: one row per bottom-level category (a form factor, or a
-    line that has none) with the price set here for it (own), the price it
-    ends up with in this view (effective), where that comes from, and how many
-    items it covers."""
+    """For the Line tab: one row per bottom-level category under Sellable
+    Product (a form factor, or a line that has none) with the price set here
+    for it (own), the price it ends up with in this view (effective), where
+    that comes from, and how many items it covers."""
     scopes = view_scopes(session, customer_type_id, customer_id)
     own_scope = _own_scope(customer_type_id, customer_id)
     names, parents = _category_maps(session)
     has_children = {p for p in parents.values() if p is not None}
-    leaves = [c for c in names if c not in has_children]
+    leaves = [c for c in _sellable_category_ids(names, parents) if c not in has_children]
     own_prices = _price_lookup(session, [own_scope], [], leaves)
 
     counts: dict[int, int] = {}
@@ -320,16 +327,24 @@ def line_price_rows(
 def sku_price_rows(
     session: Session, *, customer_type_id: int | None = None, customer_id: int | None = None
 ) -> list[dict]:
-    """For the SKU tab: every sellable item with the price set on the SKU here
+    """For the SKU tab: every sellable item (marked sellable, or in the
+    Sellable Product category) with the price set on the SKU here
     (own - an override of its line / form factor price), the price it ends up
     with in this view (effective), and where that comes from."""
     scopes = view_scopes(session, customer_type_id, customer_id)
     own_scope = _own_scope(customer_type_id, customer_id)
-    items = list(session.scalars(select(Item).where(Item.sellable.is_(True)).order_by(Item.sku)))
+    names, parents = _category_maps(session)
+    in_sellable = _sellable_category_ids(names, parents)
+    items = list(
+        session.scalars(
+            select(Item)
+            .where(Item.sellable.is_(True) | Item.category_id.in_(in_sellable or [0]))
+            .order_by(Item.sku)
+        )
+    )
     item_ids = [item.item_id for item in items]
     effective = resolve_items(session, scopes, item_ids)
     own_prices = _price_lookup(session, [own_scope], item_ids, [])
-    names, parents = _category_maps(session)
     rows = []
     for item in items:
         found = effective.get(item.item_id)

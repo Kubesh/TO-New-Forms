@@ -22,6 +22,10 @@ def get_category(session: Session, category_id: int) -> Category | None:
 # Chocolate") > form factor (e.g. "SUP"). The table is self-referencing, so
 # this is only a limit we enforce here.
 MAX_DEPTH = MAX_CATEGORY_DEPTH
+# The one category that holds what is sold. It is locked (can't be renamed),
+# only it gets form factors (the third level), and pricing is only for items in
+# it (or marked sellable).
+SELLABLE_CATEGORY_NAME = "Sellable Product"
 LEVEL_LABELS = {1: "Category", 2: "Subcategory", 3: "Form factor"}
 
 
@@ -66,6 +70,19 @@ def descendant_ids(session: Session, category_id: int) -> list[int]:
     return sorted(found)
 
 
+def is_sellable_root(category: Category | None) -> bool:
+    return (
+        category is not None
+        and category.parent_id is None
+        and category.name == SELLABLE_CATEGORY_NAME
+    )
+
+
+def in_sellable_category(category: Category | None) -> bool:
+    path = category_path(category)
+    return bool(path) and is_sellable_root(path[0])
+
+
 def create_category(
     session: Session, name: str, parent_id: int | None = None, color: str | None = None
 ) -> Category:
@@ -75,6 +92,8 @@ def create_category(
             raise ValueError("Parent category not found.")
         if category_depth(parent) >= MAX_DEPTH:
             raise ValueError(f"Categories can only go {MAX_DEPTH} levels deep.")
+        if category_depth(parent) == MAX_DEPTH - 1 and not in_sellable_category(parent):
+            raise ValueError(f"Form factors are only for {SELLABLE_CATEGORY_NAME}.")
     category = Category(name=name, parent_id=parent_id, color=color)
     session.add(category)
     session.commit()
@@ -86,6 +105,8 @@ def update_category(session: Session, category_id: int, **fields) -> Category | 
     category = session.get(Category, category_id)
     if category is None:
         return None
+    if is_sellable_root(category):
+        raise ValueError(f"{SELLABLE_CATEGORY_NAME} is locked and can't be edited.")
     for key, value in fields.items():
         setattr(category, key, value)
     session.commit()

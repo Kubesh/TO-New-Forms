@@ -52,8 +52,8 @@ def render_pricing(
             rows = line_price_rows(session, **scope)
         if not rows:
             st.info(
-                "No lines yet. Add them on the Categories page, as subcategories "
-                "(lines) and form factors."
+                "No lines yet. Add them on the Categories page, under Sellable Product, "
+                "as subcategories (lines) and form factors."
             )
         else:
             st.caption(
