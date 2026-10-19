@@ -9,12 +9,15 @@ from src.db import session_scope
 from src.services.categories import subcategory_name
 from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
+from src.services import qbo_sync
+from src.services import quickbooks as qb
 from src.services.order_shipstation import list_sends_for_po, record_send, refresh_labels
 from src.services.order_types import list_order_type_names, resolve_default_order_type
 from src.services.pricing import line_amount, order_total
 from src.services.po_sheets_sync import SheetLayoutError, remove_line_items, sync_purchase_order
 from src.services.purchase_orders import (
     add_line_item,
+    price_unpriced_lines,
     count_purchase_orders,
     create_purchase_order,
     delete_purchase_order,
@@ -465,6 +468,7 @@ def _render_detail(po_id: int) -> None:
         st.write(f"**Note:** {po.note}")
 
     _render_shipstation_section(po, shipstation_sends)
+    _render_quickbooks_section(po.po_id)
 
     st.subheader("Line items")
     if po.line_items:
@@ -484,15 +488,27 @@ def _render_detail(po_id: int) -> None:
                 row["Amount"] = f"${amount:,.2f}" if amount is not None else "—"
             rows.append(row)
         st.dataframe(rows, width="stretch", hide_index=True)
+        total, unpriced = order_total(po.line_items)
         if has_prices:
-            total, unpriced = order_total(po.line_items)
             st.write(f"**Order total:** ${total:,.2f}")
-            if unpriced:
-                st.caption(
-                    f"{unpriced} line{'s' if unpriced != 1 else ''} with no price yet - "
-                    "set it on the customer or customer type Pricing tab. It isn't in the total, "
-                    "and the order can't go to QuickBooks until every line is priced."
+        if unpriced:
+            st.caption(
+                f"{unpriced} line{'s' if unpriced != 1 else ''} with no price yet - "
+                "set it on the customer or customer type Pricing tab, then apply it here. "
+                "It isn't in the total, and the order can't go to QuickBooks until every "
+                "line is priced."
+            )
+            if po.customer_id and st.button(
+                "Apply current pricing to unpriced lines", key="apply_pricing_btn"
+            ):
+                with session_scope() as session:
+                    filled = price_unpriced_lines(session, po.po_id)
+                st.toast(
+                    f"Priced {filled} line{'s' if filled != 1 else ''}."
+                    if filled
+                    else "No pricing is set for those items yet."
                 )
+                st.rerun()
     else:
         st.write("No line items on file.")
 
@@ -514,6 +530,83 @@ def _render_detail(po_id: int) -> None:
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.write("No shipping materials recorded.")
+
+
+def _render_quickbooks_section(po_id: int) -> None:
+    st.subheader("QuickBooks")
+    flash = st.session_state.pop("quickbooks_flash", None)
+    if flash:
+        kind, message = flash
+        (st.success if kind == "success" else st.error)(message)
+
+    try:
+        with session_scope() as session:
+            po = get_purchase_order(session, po_id)
+            check = qbo_sync.check_invoice(session, po)
+            attempts = qbo_sync.list_invoice_attempts(session, po_id)
+            stale_total = None
+            if check.invoice is not None and qbo_sync.invoice_is_stale(po, check.invoice):
+                stale_total = qbo_sync.invoice_total(po)
+    except (qb.QuickBooksNotConfigured, qb.QuickBooksNotConnected, qb.QuickBooksError) as exc:
+        st.caption(f"QuickBooks isn't available: {exc}")
+        return
+
+    if check.excluded:
+        st.caption(check.excluded)
+        return
+
+    if check.invoice is not None:
+        invoice = check.invoice
+        number = invoice.doc_number or invoice.qbo_invoice_id
+        st.write(
+            f"**Invoice #{number}** created {_format_datetime(invoice.created_at)} "
+            f"· ${invoice.total_amount:,.2f}"
+        )
+        st.caption(
+            "Created unsent - review it, adjust it if needed and email it from QuickBooks."
+        )
+        if stale_total is not None:
+            st.warning(
+                f"This PO's total is now ${stale_total:,.2f}, but the invoice was created at "
+                f"${invoice.total_amount:,.2f}. The invoice in QuickBooks isn't updated "
+                "automatically - change it there."
+            )
+        return
+
+    for reason in check.blockers:
+        st.caption(f"• {reason}")
+    pending = next((a for a in attempts if a.status == "pending"), None)
+    failed = next((a for a in attempts if a.status == "failed"), None)
+    if pending:
+        st.caption(
+            "An earlier attempt didn't finish (QuickBooks couldn't be reached). Trying again "
+            "is safe - it won't create a duplicate."
+        )
+    elif failed and failed.error:
+        st.caption(f"Last attempt failed: {failed.error}")
+    if st.button(
+        "Create invoice in QuickBooks",
+        disabled=not check.can_create,
+        key="create_qbo_invoice_btn",
+    ):
+        _create_qbo_invoice(po_id)
+
+
+def _create_qbo_invoice(po_id: int) -> None:
+    try:
+        with st.spinner("Creating the invoice in QuickBooks…"):
+            with session_scope() as session:
+                invoice = qbo_sync.create_invoice(session, po_id)
+                number = invoice.doc_number or invoice.qbo_invoice_id
+        st.session_state["quickbooks_flash"] = (
+            "success",
+            f"Created QuickBooks invoice #{number} (unsent).",
+        )
+    except qbo_sync.InvoiceBlocked as exc:
+        st.session_state["quickbooks_flash"] = ("error", " ".join(exc.reasons))
+    except (qb.QuickBooksNotConfigured, qb.QuickBooksNotConnected, qb.QuickBooksError) as exc:
+        st.session_state["quickbooks_flash"] = ("error", str(exc))
+    st.rerun()
 
 
 def _render_shipstation_section(po, sends) -> None:

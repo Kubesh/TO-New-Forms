@@ -249,6 +249,25 @@ class QboItemLink(Base, TimestampMixin):
     qbo_item_name: Mapped[str | None] = mapped_column(String(255))
 
 
+class QboInvoice(Base, TimestampMixin):
+    """An attempt to create a QuickBooks invoice from a PO (see migration 0030)."""
+
+    __tablename__ = "qbo_invoices"
+
+    qbo_invoice_record_id: Mapped[int] = mapped_column(primary_key=True)
+    po_id: Mapped[int] = mapped_column(
+        ForeignKey("po_headers.po_id", ondelete="CASCADE"), nullable=False
+    )
+    realm_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    qbo_customer_id: Mapped[str | None] = mapped_column(String(40))
+    qbo_invoice_id: Mapped[str | None] = mapped_column(String(40))
+    doc_number: Mapped[str | None] = mapped_column(String(40))
+    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    error: Mapped[str | None] = mapped_column(Text)
+
+
 class OrderShipstation(Base, TimestampMixin):
     """One row each time a PO is sent to ShipStation (so a PO can be sent
     more than once). label_created_at / tracking_number are filled in later

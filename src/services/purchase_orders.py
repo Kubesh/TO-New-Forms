@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from src.models import Customer, Item, PurchaseOrder, PurchaseOrderLineItem
 from src.services.categories import load_category_chain
-from src.services.pricing import resolve_price
+from src.services.pricing import resolve_price, resolve_prices
 
 
 def _apply_po_filters(stmt, query: str | None = None, customer_id: int | None = None):
@@ -195,3 +195,22 @@ def add_line_item(
     session.commit()
     session.refresh(line_item)
     return line_item
+
+
+def price_unpriced_lines(session: Session, po_id: int) -> int:
+    """Prices the PO's lines that have no price yet from the customer's pricing
+    as it stands now, and returns how many got one. Lines that already have a
+    price are never touched (the price a line was entered at is kept)."""
+    po = session.get(PurchaseOrder, po_id)
+    if po is None:
+        return 0
+    lines = [l for l in po.line_items if l.unit_price is None and l.item_id is not None]
+    prices = resolve_prices(session, po.customer_id, [l.item_id for l in lines])
+    filled = 0
+    for line in lines:
+        if line.item_id in prices:
+            line.unit_price, line.price_source = prices[line.item_id]
+            filled += 1
+    if filled:
+        session.commit()
+    return filled

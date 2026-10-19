@@ -21,6 +21,7 @@ from src.services.customers import (
     update_customer,
 )
 from src.pages_app.pricing_editor import render_pricing
+from src.pages_app.quickbooks import link_customer_dialog
 from src.pages_app.purchase_orders import create_po_dialog, render_po_table
 from src.services.order_types import list_order_type_choices
 from src.services.purchase_orders import (
@@ -28,6 +29,8 @@ from src.services.purchase_orders import (
     get_po_line_item_stats,
     list_purchase_orders_for_customer,
 )
+from src.services import qbo_sync
+from src.services import quickbooks as qb
 from src.services.sheets_sync import SheetsSyncNotConfigured, sync_customer
 
 logger = logging.getLogger(__name__)
@@ -421,6 +424,8 @@ def _render_detail(customer_id: int) -> None:
             for child in customer.children:
                 st.write(f"- {child.customer_name}")
 
+        _render_quickbooks_link(customer)
+
         col_po_header, col_po_create = st.columns([3, 1])
         with col_po_header:
             st.subheader("Purchase Orders")
@@ -434,6 +439,36 @@ def _render_detail(customer_id: int) -> None:
 
     with tab_pricing:
         render_pricing(customer_id=customer.customer_id, key=f"pricing_customer_{customer.customer_id}")
+
+
+def _render_quickbooks_link(customer) -> None:
+    """Which QuickBooks customer this customer is invoiced under. Stores of a
+    parent account are billed through the parent, so the link lives there."""
+    st.subheader("QuickBooks")
+    try:
+        with session_scope() as session:
+            bill = qbo_sync.billing_customer(get_customer(session, customer.customer_id))
+            bill_id, bill_name = bill.customer_id, bill.customer_name
+            link = qbo_sync.get_customer_link(session, bill_id)
+            connected = qb.get_connection(session) is not None
+    except (qb.QuickBooksNotConfigured, qb.QuickBooksNotConnected, qb.QuickBooksError) as exc:
+        st.caption(f"QuickBooks isn't available: {exc}")
+        return
+    if not connected:
+        st.caption("QuickBooks isn't connected yet.")
+        return
+    is_child = bill_id != customer.customer_id
+    if is_child:
+        st.write(f"Invoiced through the parent account **{bill_name}**.")
+    if link:
+        st.write(f"QuickBooks customer: **{link.qbo_display_name or link.qbo_customer_id}**")
+    else:
+        st.write("Not linked to a QuickBooks customer - invoices can't be created yet.")
+    if st.button(
+        "Change link" if link else "Link to QuickBooks",
+        key=f"qbo_link_btn_{bill_id}",
+    ):
+        link_customer_dialog(bill_id)
 
 
 def _render_address(customer, prefix: str) -> None:

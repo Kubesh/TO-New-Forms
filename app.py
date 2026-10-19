@@ -12,6 +12,7 @@ from src.pages_app.inventory import inventory_page
 from src.pages_app.items import items_page
 from src.pages_app.production import production_page
 from src.pages_app.purchase_orders import purchase_orders_page
+from src.pages_app.quickbooks import quickbooks_page
 
 st.set_page_config(
     page_title="Treehouse Originals",
@@ -233,6 +234,7 @@ items = st.Page(items_page, title="Items", url_path="items")
 production = st.Page(production_page, title="Production", url_path="production")
 assemblies = st.Page(assemblies_page, title="Assemblies", url_path="assemblies")
 batches = st.Page(batches_page, title="Batches", url_path="batches")
+quickbooks = st.Page(quickbooks_page, title="QuickBooks", url_path="quickbooks")
 
 # Build the nav ourselves (position="hidden") so the sidebar always renders,
 # rather than relying on Streamlit's auto nav widget, which hides itself
@@ -251,6 +253,7 @@ nav_sections = {
     "Purchase Orders": [purchase_orders],
     "Inventory": [inventory, categories],
     "Items": [items],
+    "QuickBooks": [quickbooks],
 }
 if show_production:
     nav_sections["Production"] = [production, assemblies, batches]
@@ -279,6 +282,7 @@ with st.sidebar:
     with st.container(key="tp-sidebar-subnav"):
         st.page_link(categories, label="Categories")
     st.page_link(items, label="Items")
+    st.page_link(quickbooks, label="QuickBooks")
     if show_production:
         st.page_link(production, label="Production")
         with st.container(key="tp-sidebar-subnav-production"):
