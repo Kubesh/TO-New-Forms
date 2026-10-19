@@ -128,11 +128,10 @@ def render_pricing(
             line = path[1] if len(path) > 1 else path[0]
             sub = path[2] if len(path) > 2 else None
             title = f"{line} › {sub}" if sub else line
-            count = row["items"]
             _price_row(
                 target=f"c:{row['category_id']}",
                 title=title,
-                subtitle=f"{count} item{'' if count == 1 else 's'}",
+                subtitle="",
                 own=row["own"],
                 effective=row["effective"],
                 own_label=own_label,
@@ -191,7 +190,7 @@ def _price_row(
         with col_name:
             st.markdown(
                 f'<div class="price-row-name">{html.escape(title)}</div>'
-                f'<div class="price-row-sub">{html.escape(subtitle)}</div>',
+                + (f'<div class="price-row-sub">{html.escape(subtitle)}</div>' if subtitle else ""),
                 unsafe_allow_html=True,
             )
         with col_price:
