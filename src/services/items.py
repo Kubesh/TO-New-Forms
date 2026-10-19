@@ -34,8 +34,8 @@ def create_item(session: Session, sku: str, name: str, **fields) -> Item:
 
 
 # The item's subcategory (line) name for display, None when it sits directly
-# under a top-level category. For an item in a form factor that's the form
-# factor's parent. Needs Category (the item's category) and ParentCategory
+# under a top-level category. For an item in a sub sub category that's the
+# sub sub category's parent. Needs Category (the item's category) and ParentCategory
 # (its parent) joined.
 ParentCategory = aliased(Category)
 _SUBCATEGORY_LABEL = case(

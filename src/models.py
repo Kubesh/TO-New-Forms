@@ -9,7 +9,7 @@ class Base(DeclarativeBase):
     pass
 
 
-# Category > subcategory > form factor (enforced in src/services/categories.py).
+# Category > subcategory > sub sub category (enforced in src/services/categories.py).
 MAX_CATEGORY_DEPTH = 3
 
 
@@ -265,7 +265,7 @@ class OrderShippingMaterial(Base, TimestampMixin):
 
 
 class Category(Base, TimestampMixin):
-    """Categories, subcategories (lines) and form factors all live in this one
+    """Categories, subcategories (lines) and sub sub categories all live in this one
     table - each is just a row whose parent_id points at its parent's row. color is only really meaningful for top-level rows
     (it drives the card-indicator color everywhere categories are shown)
     but isn't restricted at the schema level."""

@@ -14,7 +14,7 @@ has a price for the item wins:
   4. the default prices                   ("default")
 
 Within one scope, a price on the item's SKU wins over a price on its category,
-and the nearest category wins (form factor, then its line, then the top-level
+and the nearest category wins (sub sub category, then its line, then the top-level
 category). An item with no price anywhere is left unpriced (None) rather than
 guessed at. The price a PO line was entered at is saved on the line
 (unit_price / price_source), so changing a price later doesn't rewrite old POs.
@@ -291,7 +291,7 @@ def line_price_rows(
     session: Session, *, customer_type_id: int | None = None, customer_id: int | None = None
 ) -> list[dict]:
     """For the Line tab: one row per bottom-level category under Sellable
-    Product (a form factor, or a line that has none) with the price set here
+    Product (a sub sub category, or a line that has none) with the price set here
     for it (own), the price it ends up with in this view (effective), where
     that comes from, and how many items it covers."""
     scopes = view_scopes(session, customer_type_id, customer_id)
@@ -329,7 +329,7 @@ def sku_price_rows(
 ) -> list[dict]:
     """For the SKU tab: every sellable item (marked sellable, or in the
     Sellable Product category) with the price set on the SKU here
-    (own - an override of its line / form factor price), the price it ends up
+    (own - an override of its line / sub sub category price), the price it ends up
     with in this view (effective), and where that comes from."""
     scopes = view_scopes(session, customer_type_id, customer_id)
     own_scope = _own_scope(customer_type_id, customer_id)

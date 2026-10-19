@@ -1,6 +1,5 @@
 import html
 
-import pandas as pd
 import streamlit as st
 from sqlalchemy.exc import IntegrityError
 
@@ -14,8 +13,7 @@ from src.services.categories import (
     list_items_in_category,
     list_subcategories,
     list_top_level_categories,
-    move_items_to_categories,
-    update_category,
+        update_category,
 )
 
 DEFAULT_COLOR = "#F4591A"
@@ -139,7 +137,7 @@ def _render_detail(category_id: int) -> None:
                     st.query_params.clear()
                     st.rerun()
                 return
-            # Subcategories and form factors live in tabs on their top-level
+            # Subcategories and sub sub categories live in tabs on their top-level
             # category's page, so an old link to one lands there.
             root = category_path(category)[0]
             subcategories = list_subcategories(session, root.category_id)
@@ -180,7 +178,7 @@ def _render_detail(category_id: int) -> None:
     if sellable:
         st.caption(
             f"{SELLABLE_CATEGORY_NAME} is locked - it can't be renamed. Add subcategories "
-            "(lines) here and form factors inside each one; pricing is set on these."
+            "(lines) here and sub sub categories inside each one; pricing is set on these."
         )
 
     if st.button("+ Add subcategory", key="cat_add_sub"):
@@ -202,12 +200,12 @@ def _render_detail(category_id: int) -> None:
             if sellable:
                 with col_add_ff:
                     if st.button(
-                        "+ Add form factor", width="stretch", key=f"cat_add_ff_{sub.category_id}"
+                        "+ Add sub sub category", width="stretch", key=f"cat_add_ff_{sub.category_id}"
                     ):
                         add_category_dialog(
                             parent_id=sub.category_id,
                             parent_name=sub.name,
-                            child_label="Form factor",
+                            child_label="Sub sub category",
                         )
 
             if not form_factors:
@@ -216,65 +214,14 @@ def _render_detail(category_id: int) -> None:
 
             ff_tabs = st.tabs(["All items"] + [ff.name for ff in form_factors])
             with ff_tabs[0]:
-                with st.expander("Assign items to form factors"):
-                    _render_form_factor_assignment(sub, form_factors, sub_items)
                 _render_item_list(sub_items, show_subcategory=True)
             for ff, ff_tab in zip(form_factors, ff_tabs[1:]):
                 with ff_tab:
                     if st.button(
-                        "Edit form factor", key=f"cat_edit_btn_{ff.category_id}"
+                        "Edit sub sub category", key=f"cat_edit_btn_{ff.category_id}"
                     ):
                         edit_category_dialog(ff.category_id)
                     _render_item_list(ff_items[ff.category_id], show_subcategory=False)
-
-
-def _render_form_factor_assignment(line, form_factors, items) -> None:
-    """Bulk-moves this line's items between its form factors (and back onto
-    the line itself)."""
-    if not items:
-        st.caption("No items in this line yet.")
-        return
-    none_label = "(none - directly on the line)"
-    by_name = {ff.name: ff.category_id for ff in form_factors}
-    current = {
-        item.item_id: next(
-            (ff.name for ff in form_factors if ff.category_id == item.category_id), none_label
-        )
-        for item in items
-    }
-    frame = pd.DataFrame(
-        [{"SKU": i.sku, "Item": i.name, "Form factor": current[i.item_id]} for i in items]
-    )
-    version_key = f"ff_assign_version_{line.category_id}"
-    version = st.session_state.get(version_key, 0)
-    edited = st.data_editor(
-        frame,
-        hide_index=True,
-        width="stretch",
-        disabled=["SKU", "Item"],
-        column_config={
-            "Form factor": st.column_config.SelectboxColumn(
-                "Form factor", options=[none_label] + list(by_name), required=True
-            )
-        },
-        key=f"ff_assign_{line.category_id}_{version}",
-    )
-    moves = {
-        item.item_id: line.category_id if choice == none_label else by_name[choice]
-        for item, choice in zip(items, edited["Form factor"])
-        if choice != current[item.item_id]
-    }
-    if st.button(
-        "Save assignments",
-        type="primary",
-        disabled=not moves,
-        key=f"ff_assign_save_{line.category_id}",
-    ):
-        with session_scope() as session:
-            move_items_to_categories(session, moves)
-        st.session_state[version_key] = version + 1
-        st.toast(f"Moved {len(moves)} item{'' if len(moves) == 1 else 's'}.")
-        st.rerun()
 
 
 def _render_item_list(items, show_subcategory: bool) -> None:

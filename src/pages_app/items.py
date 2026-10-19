@@ -19,7 +19,7 @@ from src.services.purchase_orders import list_line_items_for_item
 
 PAGE_SIZE = 25
 
-ALL_LABELS = {1: "All categories", 2: "All subcategories", 3: "All form factors"}
+ALL_LABELS = {1: "All categories", 2: "All subcategories", 3: "All sub sub categories"}
 
 ITEM_CARD_CSS = """
 <style>
@@ -117,7 +117,7 @@ def category_subcategory_picker(session, current_category, key_prefix: str) -> i
     columns = st.columns(MAX_DEPTH)
     for level in range(1, MAX_DEPTH + 1):
         if level == MAX_DEPTH and root_name != SELLABLE_CATEGORY_NAME:
-            break  # form factors only exist under Sellable Product
+            break  # sub sub categories only exist under Sellable Product
         label = LEVEL_LABELS[level]
         none_label = "No category" if level == 1 else f"No {label.lower()}"
         if level == 1:
@@ -208,7 +208,7 @@ def _render_list() -> None:
             root_name = None
             for level in range(1, MAX_DEPTH + 1):
                 if level == MAX_DEPTH and root_name != SELLABLE_CATEGORY_NAME:
-                    break  # form factors only exist under Sellable Product
+                    break  # sub sub categories only exist under Sellable Product
                 if level == 1:
                     options = list_top_level_categories(session)
                 elif chosen_id is not None:

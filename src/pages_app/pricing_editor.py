@@ -1,6 +1,6 @@
 """The pricing editor shared by the customer type and customer pages: a Line
-tab (one price per line / form factor) and a SKU tab (one price per SKU, which
-overrides the line / form factor price)."""
+tab (one price per line / sub sub category) and a SKU tab (one price per SKU, which
+overrides the line / sub sub category price)."""
 from decimal import Decimal
 
 import pandas as pd
@@ -53,11 +53,11 @@ def render_pricing(
         if not rows:
             st.info(
                 "No lines yet. Add them on the Categories page, under Sellable Product, "
-                "as subcategories (lines) and form factors."
+                "as subcategories (lines) and sub sub categories."
             )
         else:
             st.caption(
-                "One price for every item in a line / form factor. A SKU price on the SKU "
+                "One price for every item in a line / sub sub category. A SKU price on the SKU "
                 "tab overrides it."
             )
             show_category = len({r["path"][0] for r in rows}) > 1
@@ -68,7 +68,7 @@ def render_pricing(
                 if show_category:
                     row["Category"] = path[0]
                 row["Line"] = path[1] if len(path) > 1 else path[0]
-                row["Form factor"] = path[2] if len(path) > 2 else ""
+                row["Sub sub category"] = path[2] if len(path) > 2 else ""
                 row["Items"] = r["items"]
                 row[own_label] = _money(r["own"])
                 row["Currently charged"] = _money(r["effective"])
@@ -88,14 +88,14 @@ def render_pricing(
             st.info("No sellable items yet.")
         else:
             st.caption(
-                "A price on a single SKU. It overrides the line / form factor price for this "
+                "A price on a single SKU. It overrides the line / sub sub category price for this "
                 "item only."
             )
             data = [
                 {
                     "SKU": r["sku"],
                     "Item": r["name"],
-                    "Line / form factor": r["category"],
+                    "Line / sub sub category": r["category"],
                     own_label: _money(r["own"]),
                     "Currently charged": _money(r["effective"]),
                     "From": r["source"],

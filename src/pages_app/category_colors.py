@@ -5,7 +5,7 @@ FALLBACK_COLOR = "rgba(128, 128, 128, 0.35)"
 
 def category_color(category: Category | None) -> str:
     """A category's card-indicator color - always the top-level ancestor's
-    color (subcategories and form factors don't carry their own), falling
+    color (subcategories and sub sub categories don't carry their own), falling
     back to a neutral gray for anything uncategorized or not yet given a
     color."""
     if category is None:

@@ -19,14 +19,14 @@ def get_category(session: Session, category_id: int) -> Category | None:
 
 
 # Category (e.g. "Sellable Product") > subcategory (a line, e.g. "Drinking
-# Chocolate") > form factor (e.g. "SUP"). The table is self-referencing, so
+# Chocolate") > sub sub category (e.g. "SUP"). The table is self-referencing, so
 # this is only a limit we enforce here.
 MAX_DEPTH = MAX_CATEGORY_DEPTH
 # The one category that holds what is sold. It is locked (can't be renamed),
-# only it gets form factors (the third level), and pricing is only for items in
+# only it gets sub sub categories (the third level), and pricing is only for items in
 # it (or marked sellable).
 SELLABLE_CATEGORY_NAME = "Sellable Product"
-LEVEL_LABELS = {1: "Category", 2: "Subcategory", 3: "Form factor"}
+LEVEL_LABELS = {1: "Category", 2: "Subcategory", 3: "Sub sub category"}
 
 
 def load_category_chain(option):
@@ -39,7 +39,7 @@ def load_category_chain(option):
 
 
 def category_depth(category: Category) -> int:
-    """1 for a top-level category, 2 for a subcategory, 3 for a form factor."""
+    """1 for a top-level category, 2 for a subcategory, 3 for a sub sub category."""
     depth = 1
     while category.parent is not None:
         category = category.parent
@@ -93,7 +93,7 @@ def create_category(
         if category_depth(parent) >= MAX_DEPTH:
             raise ValueError(f"Categories can only go {MAX_DEPTH} levels deep.")
         if category_depth(parent) == MAX_DEPTH - 1 and not in_sellable_category(parent):
-            raise ValueError(f"Form factors are only for {SELLABLE_CATEGORY_NAME}.")
+            raise ValueError(f"Sub sub categories are only for {SELLABLE_CATEGORY_NAME}.")
     category = Category(name=name, parent_id=parent_id, color=color)
     session.add(category)
     session.commit()
@@ -129,7 +129,7 @@ def subcategory_name(category: Category | None) -> str | None:
 
 
 def form_factor_name(category: Category | None) -> str | None:
-    """The form factor (third level) name, or None if there isn't one."""
+    """The sub sub category (third level) name, or None if there isn't one."""
     path = category_path(category)
     return path[2].name if len(path) > 2 else None
 
@@ -146,12 +146,3 @@ def list_items_in_category(session: Session, category_id: int) -> list[Item]:
         .order_by(Item.category_id, Item.name)
     )
     return list(session.scalars(stmt).all())
-
-
-def move_items_to_categories(session: Session, moves: dict[int, int]) -> None:
-    """Sets each item's category: moves is {item_id: category_id}."""
-    for item_id, category_id in moves.items():
-        item = session.get(Item, item_id)
-        if item is not None:
-            item.category_id = category_id
-    session.commit()
