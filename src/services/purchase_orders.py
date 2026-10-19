@@ -4,6 +4,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from src.models import Customer, Item, PurchaseOrder, PurchaseOrderLineItem
+from src.services.pricing import resolve_price
 
 
 def _apply_po_filters(stmt, query: str | None = None, customer_id: int | None = None):
@@ -174,12 +175,18 @@ def update_line_item_quantities(session: Session, quantities: dict[int, int]) ->
 def add_line_item(
     session: Session, po_id: int, item_id: int, sku: str, quantity: int
 ) -> PurchaseOrderLineItem:
+    # Price the line as of now and keep it on the line, so later price
+    # changes don't rewrite this PO. Unpriced items are left with no price.
+    po = session.get(PurchaseOrder, po_id)
+    unit_price, price_source = resolve_price(session, po.customer_id if po else None, item_id)
     line_item = PurchaseOrderLineItem(
         po_id=po_id,
         item_id=item_id,
         sku=sku,
         quantity=quantity,
         original_quantity=quantity,
+        unit_price=unit_price,
+        price_source=price_source,
     )
     session.add(line_item)
     session.commit()

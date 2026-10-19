@@ -1,6 +1,8 @@
 import html
 import logging
+from decimal import Decimal
 
+import pandas as pd
 import streamlit as st
 
 from src.db import session_scope
@@ -21,6 +23,7 @@ from src.services.customers import (
     update_customer,
 )
 from src.pages_app.purchase_orders import create_po_dialog, render_po_table
+from src.services.pricing import SOURCE_LABELS, customer_price_rows, set_prices
 from src.services.order_types import list_order_type_choices
 from src.services.purchase_orders import (
     get_non_voided_po_counts,
@@ -418,6 +421,9 @@ def _render_detail(customer_id: int) -> None:
         for child in customer.children:
             st.write(f"- {child.customer_name}")
 
+    with st.expander("Pricing"):
+        _render_customer_pricing(customer)
+
     col_po_header, col_po_create = st.columns([3, 1])
     with col_po_header:
         st.subheader("Purchase Orders")
@@ -428,6 +434,79 @@ def _render_detail(customer_id: int) -> None:
         render_po_table(purchase_orders, po_stats, href_base="/purchase-orders")
     else:
         st.write("No purchase orders on file.")
+
+
+def _render_customer_pricing(customer) -> None:
+    """This customer's own per-case prices. Anything left empty falls back to
+    their parent account's price, then their customer type's, then the default
+    (all set on the Pricing page)."""
+    st.caption(
+        "Set a price here only where this customer's price differs from what they'd "
+        "otherwise get. Empty = no price of their own. Applies to purchase orders "
+        "entered from now on."
+    )
+    with session_scope() as session:
+        rows = customer_price_rows(session, customer.customer_id)
+    if not rows:
+        st.write("No sellable items yet.")
+        return
+
+    frame = pd.DataFrame(
+        [
+            {
+                "SKU": r["sku"],
+                "Item": r["name"],
+                "Customer price": float(r["override"]) if r["override"] is not None else None,
+                "Current price": float(r["effective"]) if r["effective"] is not None else None,
+                "From": SOURCE_LABELS.get(r["source"], "No price"),
+            }
+            for r in rows
+        ]
+    )
+    version_key = f"customer_pricing_version_{customer.customer_id}"
+    version = st.session_state.get(version_key, 0)
+    edited = st.data_editor(
+        frame,
+        hide_index=True,
+        width="stretch",
+        disabled=["SKU", "Item", "Current price", "From"],
+        column_config={
+            "Customer price": st.column_config.NumberColumn(
+                "Customer price", min_value=0.0, step=0.01, format="$%.2f"
+            ),
+            "Current price": st.column_config.NumberColumn("Current price", format="$%.2f"),
+        },
+        key=f"customer_pricing_{customer.customer_id}_{version}",
+    )
+
+    def blank(value):
+        return value is None or pd.isna(value)
+
+    changes = []
+    for index, row in enumerate(rows):
+        old, new = frame.iloc[index]["Customer price"], edited.iloc[index]["Customer price"]
+        if blank(old) and blank(new):
+            continue
+        if not blank(old) and not blank(new) and round(float(old), 4) == round(float(new), 4):
+            continue
+        changes.append(
+            {
+                "item_id": row["item_id"],
+                "price": None if blank(new) else Decimal(str(new)),
+                "customer_id": customer.customer_id,
+            }
+        )
+    if st.button(
+        "Save customer prices",
+        type="primary",
+        disabled=not changes,
+        key=f"save_customer_prices_{customer.customer_id}",
+    ):
+        with session_scope() as session:
+            set_prices(session, changes)
+        st.session_state[version_key] = version + 1
+        st.toast("Customer prices saved.")
+        st.rerun()
 
 
 def _render_address(customer, prefix: str) -> None:

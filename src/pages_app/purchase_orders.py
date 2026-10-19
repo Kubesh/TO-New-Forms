@@ -11,6 +11,7 @@ from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
 from src.services.order_shipstation import list_sends_for_po, record_send, refresh_labels
 from src.services.order_types import list_order_type_names, resolve_default_order_type
+from src.services.pricing import line_amount, order_total
 from src.services.po_sheets_sync import SheetLayoutError, remove_line_items, sync_purchase_order
 from src.services.purchase_orders import (
     add_line_item,
@@ -467,17 +468,30 @@ def _render_detail(po_id: int) -> None:
 
     st.subheader("Line items")
     if po.line_items:
+        # Prices only show once the PO has any (older POs predate pricing).
+        has_prices = any(li.unit_price is not None for li in po.line_items)
         rows = []
         for li in po.line_items:
-            rows.append(
-                {
-                    "SKU": li.sku or (li.item.sku if li.item else ""),
-                    "Subcategory": (subcategory_name(li.item.category) if li.item else None) or "",
-                    "Item": li.item.name if li.item else (li.item_description or ""),
-                    "Current Quantity": li.quantity,
-                }
-            )
+            row = {
+                "SKU": li.sku or (li.item.sku if li.item else ""),
+                "Subcategory": (subcategory_name(li.item.category) if li.item else None) or "",
+                "Item": li.item.name if li.item else (li.item_description or ""),
+                "Current Quantity": li.quantity,
+            }
+            if has_prices:
+                amount = line_amount(li.unit_price, li.quantity)
+                row["Price / case"] = f"${li.unit_price:,.2f}" if li.unit_price is not None else "—"
+                row["Amount"] = f"${amount:,.2f}" if amount is not None else "—"
+            rows.append(row)
         st.dataframe(rows, width="stretch", hide_index=True)
+        if has_prices:
+            total, unpriced = order_total(po.line_items)
+            st.write(f"**Order total:** ${total:,.2f}")
+            if unpriced:
+                st.caption(
+                    f"{unpriced} line{'s' if unpriced != 1 else ''} with no price yet - "
+                    "set it on the Pricing page; it isn't in the total."
+                )
     else:
         st.write("No line items on file.")
 

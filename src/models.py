@@ -151,9 +151,33 @@ class PurchaseOrderLineItem(Base, TimestampMixin):
     expanded_weight: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     box: Mapped[str | None] = mapped_column(String(50))
     shopify_item_number: Mapped[str | None] = mapped_column(String(50))
+    # The per-case price this line was entered at (see ItemPrice), kept here so
+    # a later price change doesn't rewrite an old PO. NULL for lines entered
+    # before pricing existed, or for an item with no price yet.
+    unit_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    price_source: Mapped[str | None] = mapped_column(String(20))
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="line_items")
     item: Mapped["Item | None"] = relationship(back_populates="line_items")
+
+
+class ItemPrice(Base, TimestampMixin):
+    """A per-case price for an item. Scope is a customer (their own price), a
+    customer type (every customer of that type), or neither (the default)."""
+
+    __tablename__ = "item_prices"
+
+    item_price_id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("items.item_id", ondelete="CASCADE"), nullable=False
+    )
+    customer_type_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer_types.customer_type_id", ondelete="CASCADE")
+    )
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.customer_id", ondelete="CASCADE")
+    )
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
 
 
 class QboConnection(Base, TimestampMixin):
