@@ -156,6 +156,50 @@ class PurchaseOrderLineItem(Base, TimestampMixin):
     item: Mapped["Item | None"] = relationship(back_populates="line_items")
 
 
+class QboConnection(Base, TimestampMixin):
+    """The authorised QuickBooks Online company. Tokens are rotated by Intuit
+    on every refresh, so the latest ones must always be the ones saved."""
+
+    __tablename__ = "qbo_connection"
+
+    qbo_connection_id: Mapped[int] = mapped_column(primary_key=True)
+    environment: Mapped[str] = mapped_column(String(20), nullable=False)
+    realm_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    access_token_expires_at: Mapped[datetime] = mapped_column(nullable=False)
+    refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token_expires_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class QboCustomerLink(Base, TimestampMixin):
+    """An app customer's QuickBooks customer, in one QuickBooks company
+    (realm). Keyed by realm so sandbox and real links can coexist."""
+
+    __tablename__ = "qbo_customer_link"
+
+    qbo_customer_link_id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(
+        ForeignKey("customers.customer_id", ondelete="CASCADE"), nullable=False
+    )
+    realm_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    qbo_customer_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    qbo_display_name: Mapped[str | None] = mapped_column(String(255))
+
+
+class QboItemLink(Base, TimestampMixin):
+    """An app item's QuickBooks product/service, in one QuickBooks company."""
+
+    __tablename__ = "qbo_item_link"
+
+    qbo_item_link_id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("items.item_id", ondelete="CASCADE"), nullable=False
+    )
+    realm_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    qbo_item_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    qbo_item_name: Mapped[str | None] = mapped_column(String(255))
+
+
 class OrderShipstation(Base, TimestampMixin):
     """One row each time a PO is sent to ShipStation (so a PO can be sent
     more than once). label_created_at / tracking_number are filled in later
