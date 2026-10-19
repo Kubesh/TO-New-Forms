@@ -186,6 +186,24 @@ class ItemPrice(Base, TimestampMixin):
     price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
 
 
+class CategoryExclusion(Base, TimestampMixin):
+    """A category (and everything under it) that isn't sold to a customer type
+    or to a single customer."""
+
+    __tablename__ = "category_exclusions"
+
+    category_exclusion_id: Mapped[int] = mapped_column(primary_key=True)
+    category_id: Mapped[int] = mapped_column(
+        ForeignKey("categories.category_id", ondelete="CASCADE"), nullable=False
+    )
+    customer_type_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer_types.customer_type_id", ondelete="CASCADE")
+    )
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.customer_id", ondelete="CASCADE")
+    )
+
+
 class QboConnection(Base, TimestampMixin):
     """The authorised QuickBooks Online company. Tokens are rotated by Intuit
     on every refresh, so the latest ones must always be the ones saved."""

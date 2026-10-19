@@ -24,7 +24,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from src.models import Category, Customer, Item, ItemPrice
+from src.models import Category, CategoryExclusion, Customer, Item, ItemPrice
 from src.services.categories import SELLABLE_CATEGORY_NAME
 
 CENT = Decimal("0.01")
@@ -287,6 +287,77 @@ def set_prices(session: Session, changes: list[dict]) -> None:
     session.commit()
 
 
+def _exclusion_scope_filter(scopes: list[Scope]):
+    """The default scope has no exclusions, so only customer / type scopes."""
+    parts = []
+    for _, customer_id, type_id in scopes:
+        if customer_id is not None:
+            parts.append(CategoryExclusion.customer_id == customer_id)
+        elif type_id is not None:
+            parts.append(CategoryExclusion.customer_type_id == type_id)
+    return or_(*parts) if parts else None
+
+
+def _excluded_category_ids(session: Session, scopes: list[Scope], parents: dict) -> set[int]:
+    """Every category not sold in these scopes: the excluded ones and all
+    the categories under them."""
+    condition = _exclusion_scope_filter(scopes)
+    if condition is None:
+        return set()
+    direct = set(session.scalars(select(CategoryExclusion.category_id).where(condition)))
+    return {c for c in parents if set(_chain(parents, c)) & direct}
+
+
+def excluded_item_ids(session: Session, customer_id: int | None, item_ids) -> set[int]:
+    """The items (of item_ids) that aren't sold to this customer - because of a
+    category excluded for the customer, their parent account or their type."""
+    item_ids = list(item_ids)
+    if not item_ids or customer_id is None:
+        return set()
+    _, parents = _category_maps(session)
+    excluded = _excluded_category_ids(session, customer_scopes(session, customer_id), parents)
+    if not excluded:
+        return set()
+    return set(
+        session.scalars(
+            select(Item.item_id).where(Item.item_id.in_(item_ids), Item.category_id.in_(excluded))
+        )
+    )
+
+
+def set_exclusions(session: Session, changes: list[dict]) -> None:
+    """Each change: category_id, excluded (bool), and customer_type_id or
+    customer_id."""
+    for change in changes:
+        _, customer_id, type_id = _own_scope(
+            change.get("customer_type_id"), change.get("customer_id")
+        )
+        if customer_id is None and type_id is None:
+            raise ValueError("Exclusions are for a customer type or a customer.")
+        existing = session.scalars(
+            select(CategoryExclusion).where(
+                CategoryExclusion.category_id == change["category_id"],
+                CategoryExclusion.customer_id == customer_id
+                if customer_id is not None
+                else CategoryExclusion.customer_id.is_(None),
+                CategoryExclusion.customer_type_id == type_id
+                if type_id is not None
+                else CategoryExclusion.customer_type_id.is_(None),
+            )
+        ).first()
+        if change["excluded"] and existing is None:
+            session.add(
+                CategoryExclusion(
+                    category_id=change["category_id"],
+                    customer_id=customer_id,
+                    customer_type_id=type_id,
+                )
+            )
+        elif not change["excluded"] and existing is not None:
+            session.delete(existing)
+    session.commit()
+
+
 def line_price_rows(
     session: Session, *, customer_type_id: int | None = None, customer_id: int | None = None
 ) -> list[dict]:
@@ -300,6 +371,9 @@ def line_price_rows(
     has_children = {p for p in parents.values() if p is not None}
     leaves = [c for c in _sellable_category_ids(names, parents) if c not in has_children]
     own_prices = _price_lookup(session, [own_scope], [], leaves)
+    # Exclusions: set here (own) or coming from a higher scope (inherited).
+    excluded_here = _excluded_category_ids(session, [own_scope], parents)
+    excluded_all = _excluded_category_ids(session, scopes, parents)
 
     counts: dict[int, int] = {}
     for (category_id,) in session.execute(select(Item.category_id).where(Item.category_id.isnot(None))):
@@ -318,6 +392,8 @@ def line_price_rows(
                 "own": own_prices.get((None, category_id, own_scope[1], own_scope[2])),
                 "effective": effective[0] if effective else None,
                 "source": describe_source(effective[1], effective[2]) if effective else "No price",
+                "excluded_own": category_id in excluded_here,
+                "excluded_inherited": category_id in excluded_all and category_id not in excluded_here,
             }
         )
     rows.sort(key=lambda r: [p.lower() for p in r["path"]])
@@ -345,6 +421,7 @@ def sku_price_rows(
     item_ids = [item.item_id for item in items]
     effective = resolve_items(session, scopes, item_ids)
     own_prices = _price_lookup(session, [own_scope], item_ids, [])
+    excluded = _excluded_category_ids(session, scopes, parents)
     rows = []
     for item in items:
         found = effective.get(item.item_id)
@@ -358,6 +435,7 @@ def sku_price_rows(
                 "own": own_prices.get((item.item_id, None, own_scope[1], own_scope[2])),
                 "effective": found[0] if found else None,
                 "source": describe_source(found[1], found[2]) if found else "No price",
+                "excluded": item.category_id in excluded,
             }
         )
     return rows

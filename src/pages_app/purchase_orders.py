@@ -754,7 +754,9 @@ def edit_po_dialog(po_id: int) -> None:
     with session_scope() as session:
         po = get_purchase_order(session, po_id)
         existing_item_ids = {li.item_id for li in po.line_items if li.item_id} if po else set()
-        item_choices = list_sellable_item_choices(session, exclude_item_ids=existing_item_ids)
+        item_choices = list_sellable_item_choices(
+            session, exclude_item_ids=existing_item_ids, customer_id=po.customer_id if po else None
+        )
         order_type_options = list_order_type_names(session)
 
     if not po:
@@ -936,7 +938,7 @@ def edit_po_dialog(po_id: int) -> None:
 def create_po_dialog(customer_id: int) -> None:
     with session_scope() as session:
         customer = get_customer(session, customer_id)
-        item_choices = list_sellable_item_choices(session)
+        item_choices = list_sellable_item_choices(session, customer_id=customer_id)
         order_type_options = list_order_type_names(session)
 
     if not customer:

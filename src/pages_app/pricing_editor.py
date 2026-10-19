@@ -11,9 +11,15 @@ from decimal import Decimal
 import streamlit as st
 
 from src.db import session_scope
-from src.services.pricing import line_price_rows, set_prices, sku_price_rows
+from src.services.pricing import (
+    line_price_rows,
+    set_exclusions,
+    set_prices,
+    sku_price_rows,
+)
 
 PENDING = "pricing_pending"
+PENDING_EXCL = "pricing_pending_excl"  # category_id -> True if not sold
 ACTIVE_SCOPE = "pricing_active_scope"
 
 PRICING_CSS = """
@@ -31,6 +37,11 @@ PRICING_CSS = """
     padding: 0 0.6rem;
 }
 [class*="st-key-pricerow-changed-"] { background: #FFF2A8; }
+[class*="st-key-pricerow-"][class*="notsold-"] .price-row-name,
+[class*="st-key-pricerow-"][class*="notsold-"] .price-row-amount { opacity: 0.45; }
+[class*="st-key-pricerow-"][class*="notsold-"] .price-row-amount {
+    font-weight: 400; font-style: italic;
+}
 .price-row-name { font-weight: 700; line-height: 1.3; }
 .price-row-sub { font-size: 0.78rem; opacity: 0.65; line-height: 1.25; }
 .price-row-amount { font-size: 1rem; line-height: 1.3; font-weight: 700; text-align: right; }
@@ -53,6 +64,10 @@ def _pending() -> dict:
     return st.session_state.setdefault(PENDING, {})
 
 
+def _pending_excl() -> dict:
+    return st.session_state.setdefault(PENDING_EXCL, {})
+
+
 def render_pricing(
     *, customer_type_id: int | None = None, customer_id: int | None = None, key: str
 ) -> None:
@@ -69,15 +84,20 @@ def render_pricing(
     if st.session_state.get(ACTIVE_SCOPE) != key:
         st.session_state[ACTIVE_SCOPE] = key
         st.session_state[PENDING] = {}
+        st.session_state[PENDING_EXCL] = {}
     pending = _pending()
+    pending_excl = _pending_excl()
+    can_exclude = customer_id is not None or customer_type_id is not None
+    who_short = "customer" if customer_id is not None else "customer type"
 
     st.markdown(PRICING_CSS, unsafe_allow_html=True)
-    if pending:
+    changes_count = len(pending) + len(pending_excl)
+    if changes_count:
         with st.container(key="pricing-savebar"):
             col_text, col_save, col_cancel = st.columns([3, 1, 1])
             with col_text:
                 st.write(
-                    f"**{len(pending)} unsaved price change{'s' if len(pending) != 1 else ''}**"
+                    f"**{changes_count} unsaved change{'s' if changes_count != 1 else ''}**"
                 )
             with col_save:
                 if st.button("Save", type="primary", width="stretch", key=f"{key}_save"):
@@ -91,20 +111,34 @@ def render_pricing(
                         }
                         for target, (price, _) in pending.items()
                     ]
+                    exclusions = [
+                        {"category_id": category_id, "excluded": excluded, **scope}
+                        for category_id, excluded in pending_excl.items()
+                    ]
                     with session_scope() as session:
-                        set_prices(session, changes)
+                        if changes:
+                            set_prices(session, changes)
+                        if exclusions:
+                            set_exclusions(session, exclusions)
                     st.session_state[PENDING] = {}
-                    st.toast(f"Saved {len(changes)} price change{'s' if len(changes) != 1 else ''}.")
+                    st.session_state[PENDING_EXCL] = {}
+                    st.toast(f"Saved {changes_count} change{'s' if changes_count != 1 else ''}.")
                     st.rerun()
             with col_cancel:
                 if st.button("Cancel", width="stretch", key=f"{key}_cancel"):
                     st.session_state[PENDING] = {}
+                    st.session_state[PENDING_EXCL] = {}
                     st.rerun()
 
     st.caption(
         f"Per-case prices for {who}. The price shown is what a new purchase order line gets "
         "(a yellow row has an unsaved change). Changes apply to purchase orders entered from "
         "now on - existing POs keep the price they were entered at."
+        + (
+            f" A line marked \"Not sold\" can't be added to purchase orders for this {who_short}."
+            if can_exclude
+            else ""
+        )
     )
     tab_line, tab_sku = st.tabs(["Line", "SKU"])
 
@@ -134,6 +168,11 @@ def render_pricing(
                 effective=row["effective"],
                 own_label=own_label,
                 key=key,
+                exclusion=(
+                    (row["category_id"], row["excluded_own"], row["excluded_inherited"], who_short)
+                    if can_exclude
+                    else None
+                ),
             )
 
     with tab_sku:
@@ -163,16 +202,36 @@ def render_pricing(
                     effective=row["effective"],
                     own_label=own_label,
                     key=key,
+                    not_sold=row["excluded"],
                 )
 
 
 def _price_row(
-    *, target: str, title: str, subtitle: str, own, effective, own_label: str, key: str
+    *,
+    target: str,
+    title: str,
+    subtitle: str,
+    own,
+    effective,
+    own_label: str,
+    key: str,
+    exclusion: tuple | None = None,
+    not_sold: bool = False,
 ) -> None:
+    """exclusion is (category_id, excluded here, excluded by a higher level,
+    who) on a Line row that can be switched off; not_sold marks a SKU row whose
+    category is switched off (read-only here)."""
     pending = _pending()
     changed = target in pending
     amount = _money(effective)
-    if changed:
+    if exclusion:
+        category_id, excluded_own, excluded_inherited, _ = exclusion
+        excluded_now = _pending_excl().get(category_id, excluded_own) or excluded_inherited
+        changed = changed or category_id in _pending_excl()
+        not_sold = excluded_now
+    if not_sold:
+        amount = "Not sold"
+    elif changed and target in pending:
         new_price, _ = pending[target]
         if new_price is not None:
             amount = _money(new_price)
@@ -181,7 +240,8 @@ def _price_row(
             amount = "Inherited"
 
     safe_target = target.replace(":", "-")
-    with st.container(key=f"pricerow-{'changed-' if changed else ''}{safe_target}"):
+    row_key = f"pricerow-{'changed-' if changed else ''}{'notsold-' if not_sold else ''}{safe_target}"
+    with st.container(key=row_key):
         col_name, col_price, col_edit = st.columns([6, 3, 1], vertical_alignment="center")
         with col_name:
             st.markdown(
@@ -195,35 +255,74 @@ def _price_row(
                 unsafe_allow_html=True,
             )
         with col_edit:
-            if st.button("✎", key=f"{key}_edit_{safe_target}", help="Edit price"):
-                edit_price_dialog(target, title, own, effective, own_label)
+            # SKU rows of a switched-off category can't be priced or sold.
+            if st.button(
+                "✎",
+                key=f"{key}_edit_{safe_target}",
+                help="Edit price",
+                disabled=not_sold and not exclusion,
+            ):
+                # A fresh nonce per opening, so widgets inside the dialog start from the
+                # saved/staged values instead of whatever was left typed last time.
+                st.session_state["edit_price_nonce"] = st.session_state.get("edit_price_nonce", 0) + 1
+                edit_price_dialog(
+                    target, title, own, effective, own_label, exclusion,
+                    st.session_state["edit_price_nonce"],
+                )
 
 
 @st.dialog("Edit price")
-def edit_price_dialog(target: str, title: str, own, effective, own_label: str) -> None:
+def edit_price_dialog(
+    target: str,
+    title: str,
+    own,
+    effective,
+    own_label: str,
+    exclusion: tuple | None = None,
+    nonce: int = 0,
+) -> None:
     pending = _pending()
     if target in pending and pending[target][0] is not None:
         start = pending[target][0]
     else:
         start = own if own is not None else effective
+    start = float(start) if start is not None else 0.0
     st.write(f"**{title}**")
+
+    sold = True
+    if exclusion:
+        category_id, excluded_own, excluded_inherited, who = exclusion
+        if excluded_inherited:
+            st.checkbox(f"Sold to this {who}", value=False, disabled=True, key=f"edit_sold_{target}_{nonce}")
+            st.caption("Switched off for a higher level (their parent account or customer type).")
+            sold = False
+        else:
+            currently_excluded = _pending_excl().get(category_id, excluded_own)
+            sold = st.checkbox(
+                f"Sold to this {who}", value=not currently_excluded, key=f"edit_sold_{target}_{nonce}"
+            )
+
     price = st.number_input(
         "Price per case",
         min_value=0.0,
         step=0.01,
         format="%.2f",
-        value=float(start) if start is not None else 0.0,
-        key=f"edit_price_{target}",
+        value=start,
+        disabled=not sold,
+        key=f"edit_price_{target}_{nonce}",
     )
 
     col_set, col_remove, col_cancel = st.columns(3)
     with col_set:
-        if st.button("Set price", type="primary", width="stretch", key=f"edit_price_set_{target}"):
-            _stage(target, Decimal(str(price)), own)
+        if st.button("Apply", type="primary", width="stretch", key=f"edit_price_set_{target}"):
+            if exclusion and not exclusion[2]:
+                _stage_exclusion(exclusion[0], not sold, exclusion[1])
+            if sold and round(price, 4) != round(start, 4):
+                _stage(target, Decimal(str(price)), own)
             st.rerun()
     with col_remove:
         if st.button(
-            "Remove",
+            "Remove price",
             width="stretch",
             disabled=own is None and target not in pending,
             help=f"Remove the {own_label.lower()} set here, so it's inherited again.",
@@ -234,6 +333,15 @@ def edit_price_dialog(target: str, title: str, own, effective, own_label: str) -
     with col_cancel:
         if st.button("Cancel", width="stretch", key=f"edit_price_cancel_{target}"):
             st.rerun()
+
+
+def _stage_exclusion(category_id: int, excluded: bool, saved: bool) -> None:
+    """Stages switching a category off/on - or drops it if it matches what's saved."""
+    pending = _pending_excl()
+    if excluded == saved:
+        pending.pop(category_id, None)
+    else:
+        pending[category_id] = excluded
 
 
 def _stage(target: str, price: Decimal | None, own) -> None:

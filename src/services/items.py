@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, aliased, selectinload
 
 from src.models import Category, Item
 from src.services.categories import load_category_chain
+from src.services.pricing import excluded_item_ids
 
 
 def get_item(session: Session, item_id: int) -> Item | None:
@@ -52,18 +53,23 @@ def _with_category_joins(stmt):
 
 
 def list_sellable_item_choices(
-    session: Session, exclude_item_ids=None
+    session: Session, exclude_item_ids=None, customer_id: int | None = None
 ) -> list[tuple[int, str, str, str | None]]:
     """(item_id, sku, name, subcategory) tuples for sellable items, for
     populating line-item SKU pickers. Items already on the PO
-    (exclude_item_ids) are left out so they can't be added a second time."""
+    (exclude_item_ids) are left out so they can't be added a second time, and
+    so are items that aren't sold to customer_id (see CategoryExclusion)."""
     stmt = _with_category_joins(
         select(Item.item_id, Item.sku, Item.name, _SUBCATEGORY_LABEL)
     ).where(Item.sellable.is_(True))
     if exclude_item_ids:
         stmt = stmt.where(Item.item_id.notin_(exclude_item_ids))
     stmt = stmt.order_by(Item.sku)
-    return [tuple(row) for row in session.execute(stmt).all()]
+    choices = [tuple(row) for row in session.execute(stmt).all()]
+    if customer_id is not None:
+        not_sold = excluded_item_ids(session, customer_id, [c[0] for c in choices])
+        choices = [c for c in choices if c[0] not in not_sold]
+    return choices
 
 
 def list_shipping_material_choices(
