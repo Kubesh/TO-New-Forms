@@ -18,6 +18,8 @@ and send from QuickBooks. Faire orders never go to QuickBooks. An invoice is
 refused until the customer and every SKU on the PO are linked and every line
 has a price.
 """
+import os
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
@@ -385,8 +387,49 @@ def check_invoice(session: Session, po: PurchaseOrder) -> InvoiceCheck:
     return check
 
 
+PO_FIELD_MAX_LENGTH = 31  # QuickBooks custom field values are limited to 31 characters
+
+
+def po_reference_field(session: Session) -> tuple[str, str]:
+    """(definition id, name) of the invoice custom field the PO number goes in:
+    the one named like "PO Reference no." / "PO Number" in the company's
+    sales form settings. QBO_PO_CUSTOM_FIELD_ID overrides the lookup."""
+    override = os.environ.get("QBO_PO_CUSTOM_FIELD_ID", "").strip()
+    if override:
+        return override, "PO Reference no."
+    prefs = qb._request(session, "GET", "preferences").get("Preferences", {})
+    groups = (prefs.get("SalesFormsPrefs") or {}).get("CustomField") or []
+    names, enabled = {}, {}
+    for group in groups:
+        for entry in group.get("CustomField", []):
+            name = entry.get("Name", "")
+            if match := re.fullmatch(r"SalesFormsPrefs\.SalesCustomName(\d+)", name):
+                names[match.group(1)] = entry.get("StringValue", "")
+            elif match := re.fullmatch(r"SalesFormsPrefs\.UseSalesCustom(\d+)", name):
+                enabled[match.group(1)] = bool(entry.get("BooleanValue"))
+    candidates = {k: v for k, v in names.items() if v and enabled.get(k, True)}
+
+    def looks_like_po(label: str) -> bool:
+        flat = re.sub(r"[^a-z]", "", label.lower())
+        return flat.startswith("po") or flat.startswith("purchaseorder")
+
+    for definition_id, label in sorted(candidates.items()):
+        if looks_like_po(label):
+            return definition_id, label
+    found = ", ".join(f'"{v}"' for v in candidates.values()) or "none"
+    raise InvoiceBlocked(
+        [
+            "QuickBooks has no custom field for the PO number - add one named \"PO Reference no.\" "
+            f"under Settings > Account and settings > Sales > Custom fields (found: {found})."
+        ]
+    )
+
+
 def build_invoice_payload(
-    po: PurchaseOrder, qbo_customer_id: str, item_links: dict[int, QboItemLink]
+    po: PurchaseOrder,
+    qbo_customer_id: str,
+    item_links: dict[int, QboItemLink],
+    po_field: tuple[str, str] | None = None,
 ) -> dict:
     lines = []
     for line in _live_lines(po):
@@ -405,9 +448,18 @@ def build_invoice_payload(
         "CustomerRef": {"value": qbo_customer_id},
         "TxnDate": (po.order_date or date.today()).isoformat(),
         "Line": lines,
-        "CustomerMemo": {"value": f"PO #{po.po_number}"},
-        "PrivateNote": f"Created from Treehouse Originals Operations, PO {po.po_number}.",
+        "PrivateNote": "Created from Treehouse Operations App",
     }
+    if po_field:
+        definition_id, name = po_field
+        payload["CustomField"] = [
+            {
+                "DefinitionId": definition_id,
+                "Name": name,
+                "Type": "StringType",
+                "StringValue": po.po_number,
+            }
+        ]
     if po.due_date:
         payload["DueDate"] = po.due_date.isoformat()
     ship_to = po.customer
@@ -451,10 +503,16 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
         session.expire_all()
         po = get_purchase_order(session, po_id)
 
+    if len(po.po_number or "") > PO_FIELD_MAX_LENGTH:
+        raise InvoiceBlocked(
+            [f"The PO number is longer than the {PO_FIELD_MAX_LENGTH} characters a QuickBooks field holds."]
+        )
+    po_field = po_reference_field(session)
+
     realm = current_realm(session)
     bill = billing_customer(po.customer)
     qbo_customer_id = get_customer_link(session, bill.customer_id).qbo_customer_id
-    payload = build_invoice_payload(po, qbo_customer_id, current_item_links(session))
+    payload = build_invoice_payload(po, qbo_customer_id, current_item_links(session), po_field)
     total = invoice_total(po)
 
     # An earlier attempt whose outcome is unknown is retried under the same
