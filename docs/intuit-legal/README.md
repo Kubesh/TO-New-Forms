@@ -4,9 +4,9 @@
 keys. They are plain, self-contained HTML (no WordPress needed) and carry a `noindex, nofollow` tag so
 search engines are asked to skip them.
 
-Before publishing, replace the three placeholders in both files:
+Parties are RZNCE LLC (developer) and Treehouse Packables LLC (customer). Before publishing, replace the
+remaining placeholders:
 
-- `[DEVELOPER NAME]` - your name or business name
 - `[CONTACT EMAIL]` - where questions and deletion requests go
 - `[STATE / COUNTRY]` - governing law (eula.html only)
 
