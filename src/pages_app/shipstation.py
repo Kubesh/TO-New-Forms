@@ -27,6 +27,25 @@ def shipstation_page() -> None:
                 f"Connected to ShipStation ({len(stores)} store{'' if len(stores) == 1 else 's'} "
                 "on the account)."
             )
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "Store ID": store.get("storeId"),
+                            "Name": store.get("storeName"),
+                            "Marketplace": store.get("marketplaceName"),
+                            "Active": "Yes" if store.get("active") else "No",
+                        }
+                        for store in stores
+                    ]
+                ),
+                hide_index=True,
+                width="stretch",
+            )
+            st.caption(
+                "Set SHIPSTATION_STORE_ID in .env to a Store ID above to file new orders "
+                "under that store; leave it blank for ShipStation's default."
+            )
         except (ShipStationNotConfigured, ShipStationError) as exc:
             st.error(str(exc))
     store_id = os.environ.get("SHIPSTATION_STORE_ID", "").strip()
