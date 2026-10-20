@@ -205,6 +205,16 @@ class CategoryExclusion(Base, TimestampMixin):
     )
 
 
+class AppSetting(Base):
+    """A small setting edited in the app (see src/services/app_settings.py)."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+
+
 class QboConnection(Base, TimestampMixin):
     """The authorised QuickBooks Online company. Tokens are rotated by Intuit
     on every refresh, so the latest ones must always be the ones saved."""

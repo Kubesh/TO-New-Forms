@@ -131,7 +131,27 @@ def order_weight_lb(po: PurchaseOrder) -> tuple[Decimal | None, list[str]]:
     return total, missing
 
 
-def build_order_payload(po: PurchaseOrder, sequence: int = 1) -> dict:
+# How new orders are shipped, chosen on the ShipStation page. Empty means
+# ShipStation's own default (its automation rules / whatever is picked there).
+SHIPPING_SETTING_KEYS = ("shipstation_carrier_code", "shipstation_service_code", "shipstation_service_name")
+
+
+def configured_shipping_method(session) -> dict | None:
+    """{"carrier_code", "service_code", "name"} for the saved method, or None."""
+    from src.services.app_settings import get_settings
+
+    saved = get_settings(session, list(SHIPPING_SETTING_KEYS))
+    carrier, service = saved.get("shipstation_carrier_code"), saved.get("shipstation_service_code")
+    if not carrier or not service:
+        return None
+    return {
+        "carrier_code": carrier,
+        "service_code": service,
+        "name": saved.get("shipstation_service_name") or service,
+    }
+
+
+def build_order_payload(po: PurchaseOrder, sequence: int = 1, shipping: dict | None = None) -> dict:
     """The createorder body for a PO. Needs po.customer and the line items
     (and each line's item) loaded - see get_purchase_order.
 
@@ -201,6 +221,9 @@ def build_order_payload(po: PurchaseOrder, sequence: int = 1) -> dict:
         "items": items,
         "advancedOptions": advanced_options,
     }
+    if shipping:
+        payload["carrierCode"] = shipping["carrier_code"]
+        payload["serviceCode"] = shipping["service_code"]
     weight_lb, _ = order_weight_lb(po)
     if weight_lb is not None:
         payload["weight"] = {"value": float(round(weight_lb, 3)), "units": "pounds"}
@@ -238,10 +261,33 @@ def _request(method: str, path: str, **kwargs) -> dict:
     return response.json()
 
 
-def send_order(po: PurchaseOrder, sequence: int = 1) -> dict:
+def send_order(po: PurchaseOrder, sequence: int = 1, shipping: dict | None = None) -> dict:
     """Creates a new order in ShipStation for this send of the PO. Returns
-    ShipStation's order record, which includes 'orderId'."""
-    return _request("POST", "/orders/createorder", json=build_order_payload(po, sequence))
+    ShipStation's order record, which includes 'orderId'. `shipping` (see
+    configured_shipping_method) sets the carrier and service on the order."""
+    return _request(
+        "POST", "/orders/createorder", json=build_order_payload(po, sequence, shipping)
+    )
+
+
+def list_carriers() -> list[dict]:
+    """The carriers on the ShipStation account: [{"code", "name"}]."""
+    data = _request("GET", "/carriers")
+    return [
+        {"code": c.get("code"), "name": c.get("name") or c.get("code")}
+        for c in (data if isinstance(data, list) else [])
+        if c.get("code")
+    ]
+
+
+def list_services(carrier_code: str) -> list[dict]:
+    """A carrier's domestic services: [{"code", "name"}]."""
+    data = _request("GET", "/carriers/listservices", params={"carrierCode": carrier_code})
+    return [
+        {"code": s.get("code"), "name": s.get("name") or s.get("code")}
+        for s in (data if isinstance(data, list) else [])
+        if s.get("code") and s.get("domestic", True)
+    ]
 
 
 def _parse_timestamp(value: str | None) -> datetime | None:

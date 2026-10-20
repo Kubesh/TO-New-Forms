@@ -31,6 +31,7 @@ from src.services.purchase_orders import (
 from src.services.sheets_sync import SheetsSyncNotConfigured
 from src.services.shipping_materials import list_shipping_materials_for_po, replace_shipping_materials
 from src.services.shipstation import (
+    configured_shipping_method,
     ShipStationError,
     ShipStationNotConfigured,
     next_sequence,
@@ -702,7 +703,8 @@ def _send_po_to_shipstation(po_id: int) -> None:
                     raise ShipStationError("This PO can't be sent - it's voided or already shipped.")
                 existing_keys = {send.order_key for send in list_sends_for_po(session, po_id)}
                 sequence = next_sequence(po, existing_keys)
-                order = send_order(po, sequence)
+                shipping = configured_shipping_method(session)
+                order = send_order(po, sequence, shipping)
                 record_send(
                     session, po, order, order_key_for(po, sequence), order_number_for(po, sequence)
                 )
@@ -711,6 +713,8 @@ def _send_po_to_shipstation(po_id: int) -> None:
         st.session_state["shipstation_flash"] = ("error", str(exc))
     else:
         message = f"Sent to ShipStation (order ID {order['orderId']})."
+        if shipping:
+            message += f" Shipping method: {shipping['name']}."
         if weight_lb is not None:
             message += f" Weight sent: {weight_lb:.2f} lb."
         else:
