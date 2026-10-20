@@ -77,23 +77,7 @@ def _render_status() -> None:
     st.write(
         f"**Sellable SKUs linked:** {sum(1 for i in items if i.item_id in item_links)} of {len(items)}"
     )
-    try:
-        with session_scope() as session:
-            po_field, fields = qbo_sync.find_po_field(session)
-    except QBO_ERRORS as exc:
-        _show_error(exc)
-        return
-    listed = ", ".join(f'{k}: "{v}"' for k, v in sorted(fields.items())) or "none found"
-    st.write(
-        "**PO number goes in:** "
-        + (
-            f'"{po_field[1]}" (field {po_field[0]})'
-            if po_field
-            else "nowhere automatically - QuickBooks doesn't expose the PO Reference no. box "
-            "to the API, so it has to be typed into each invoice"
-        )
-    )
-    st.caption(f"Invoice custom fields QuickBooks reports: {listed}")
+
 
 
 # --- shared dialogs ---------------------------------------------------------
