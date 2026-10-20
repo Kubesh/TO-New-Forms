@@ -49,6 +49,8 @@ ATTEMPTS = [
         {},
     ),
     ("PROBE-E", "PONumber, older minor version", {"PONumber": "PROBE-E"}, {"minorversion": "65"}),
+    ("PROBE-F", "PONumber, newer minor version 76", {"PONumber": "PROBE-F"}, {"minorversion": "76"}),
+    ("PROBE-G", "PONumber, newer minor version 80", {"PONumber": "PROBE-G"}, {"minorversion": "80"}),
 ]
 
 
@@ -91,7 +93,7 @@ def main() -> None:
             print("accepted. Echoed back:", json.dumps({k: updated.get(k) for k in ("PONumber", "CustomField") if k in updated}))
         print(
             "\nNow open the invoice in QuickBooks, reload it, and look at the PO Reference no. box.\n"
-            "Tell me which marker (PROBE-A ... PROBE-E) it shows, or that it's empty."
+            "Tell me which marker (PROBE-A ... PROBE-G) it shows, or that it's empty."
         )
     except (qbo.QuickBooksNotConfigured, qbo.QuickBooksNotConnected, qbo.QuickBooksError) as exc:
         sys.exit(str(exc))

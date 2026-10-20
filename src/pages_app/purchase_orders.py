@@ -598,10 +598,15 @@ def _create_qbo_invoice(po_id: int) -> None:
             with session_scope() as session:
                 invoice = qbo_sync.create_invoice(session, po_id)
                 number = invoice.doc_number or invoice.qbo_invoice_id
-        st.session_state["quickbooks_flash"] = (
-            "success",
-            f"Created QuickBooks invoice #{number} (unsent).",
-        )
+                po_filled = getattr(invoice, "po_number_filled", True)
+                po_number = get_purchase_order(session, po_id).po_number
+        message = f"Created QuickBooks invoice #{number} (unsent)."
+        if not po_filled:
+            message += (
+                f" QuickBooks doesn't let the app fill in PO Reference no. - type "
+                f"{po_number} into that box on the invoice."
+            )
+        st.session_state["quickbooks_flash"] = ("success", message)
     except qbo_sync.InvoiceBlocked as exc:
         st.session_state["quickbooks_flash"] = ("error", " ".join(exc.reasons))
     except (qb.QuickBooksNotConfigured, qb.QuickBooksNotConnected, qb.QuickBooksError) as exc:

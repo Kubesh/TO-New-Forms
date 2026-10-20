@@ -79,18 +79,19 @@ def _render_status() -> None:
     )
     try:
         with session_scope() as session:
-            fields = qbo_sync.invoice_custom_fields(session)
-            try:
-                po_field = qbo_sync.po_reference_field(session)
-            except qbo_sync.InvoiceBlocked:
-                po_field = None
+            po_field, fields = qbo_sync.find_po_field(session)
     except QBO_ERRORS as exc:
         _show_error(exc)
         return
     listed = ", ".join(f'{k}: "{v}"' for k, v in sorted(fields.items())) or "none found"
     st.write(
-        f"**PO number goes in:** "
-        + (f"\"{po_field[1]}\" (field {po_field[0]})" if po_field else "not found - invoices are blocked")
+        "**PO number goes in:** "
+        + (
+            f'"{po_field[1]}" (field {po_field[0]})'
+            if po_field
+            else "nowhere automatically - QuickBooks doesn't expose the PO Reference no. box "
+            "to the API, so it has to be typed into each invoice"
+        )
     )
     st.caption(f"Invoice custom fields QuickBooks reports: {listed}")
 

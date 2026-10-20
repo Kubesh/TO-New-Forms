@@ -468,20 +468,6 @@ def invoice_custom_fields(session: Session) -> dict[str, str]:
     return find_po_field(session)[1]
 
 
-def po_reference_field(session: Session) -> tuple[str, str, bool]:
-    """(definition id, name, enhanced) of the invoice field for the PO number."""
-    found, seen = find_po_field(session)
-    if found:
-        return found
-    listed = ", ".join(f'{k}: "{v}"' for k, v in sorted(seen.items())) or "none"
-    raise InvoiceBlocked(
-        [
-            "Couldn't find QuickBooks' PO number field on invoices (custom fields QuickBooks "
-            f"reported: {listed}). Set QBO_PO_CUSTOM_FIELD_ID in .env to its number if you know it."
-        ]
-    )
-
-
 def build_invoice_payload(
     po: PurchaseOrder,
     qbo_customer_id: str,
@@ -564,7 +550,10 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
         raise InvoiceBlocked(
             [f"The PO number is longer than the {PO_FIELD_MAX_LENGTH} characters a QuickBooks field holds."]
         )
-    po_field = po_reference_field(session)
+    # The PO number goes in the PO Reference no. field when QuickBooks exposes
+    # one through the API; if it doesn't, the invoice is still created and the
+    # person enters the PO number by hand (the caller is told).
+    po_field, _ = find_po_field(session)
 
     realm = current_realm(session)
     bill = billing_customer(po.customer)
@@ -604,7 +593,7 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
             "invoice",
             json=payload,
             request_id=attempt.request_id,
-            params={"include": ENHANCED_CUSTOM_FIELDS} if po_field[2] else None,
+            params={"include": ENHANCED_CUSTOM_FIELDS} if po_field and po_field[2] else None,
         )
     except qb.QuickBooksError as exc:
         # "Couldn't reach" means the outcome is unknown: leave it pending so a
@@ -621,6 +610,7 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
     attempt.error = None
     session.commit()
     session.refresh(attempt)
+    attempt.po_number_filled = po_field is not None  # not stored; for the caller's message
     return attempt
 
 
