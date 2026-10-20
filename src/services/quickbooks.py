@@ -8,6 +8,8 @@ Settings (environment):
   QBO_ENVIRONMENT                   "sandbox" (default) or "production"
   QBO_REDIRECT_URI                  must match one registered on the Intuit
                                     app; defaults to http://localhost:8000/callback
+  QBO_TOKEN_ENCRYPTION_KEY          encrypts the saved tokens at rest (a Fernet
+                                    key: python scripts/qbo_connect.py --make-key)
 
 The connection (company ID and tokens) lives in the qbo_connection table and
 is created once with scripts/qbo_connect.py. Intuit access tokens last about
@@ -26,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import requests
+from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -58,6 +61,55 @@ class QuickBooksNotConnected(Exception):
 class QuickBooksError(Exception):
     """QuickBooks refused the request or couldn't be reached. The message is
     written to be shown as-is."""
+
+
+ENCRYPTED_PREFIX = "enc:v1:"
+
+
+def generate_encryption_key() -> str:
+    return Fernet.generate_key().decode()
+
+
+def _fernet() -> Fernet | None:
+    key = os.environ.get("QBO_TOKEN_ENCRYPTION_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        return Fernet(key.encode())
+    except ValueError as exc:
+        raise QuickBooksNotConfigured(
+            "QBO_TOKEN_ENCRYPTION_KEY isn't a valid key - make one with "
+            "python scripts/qbo_connect.py --make-key."
+        ) from exc
+
+
+def _require_fernet() -> Fernet:
+    fernet = _fernet()
+    if fernet is None:
+        raise QuickBooksNotConfigured(
+            "QBO_TOKEN_ENCRYPTION_KEY isn't set - the QuickBooks tokens are stored encrypted. "
+            "Make a key with python scripts/qbo_connect.py --make-key and put it in .env."
+        )
+    return fernet
+
+
+def _encrypt(value: str) -> str:
+    return ENCRYPTED_PREFIX + _require_fernet().encrypt(value.encode()).decode()
+
+
+def _decrypt(value: str) -> str:
+    """The plain token. A value without the prefix is a token saved before
+    encryption existed; it is read as is and encrypted the next time it's used."""
+    if not value.startswith(ENCRYPTED_PREFIX):
+        return value
+    try:
+        return _require_fernet().decrypt(value[len(ENCRYPTED_PREFIX):].encode()).decode()
+    except InvalidToken as exc:
+        raise QuickBooksNotConnected(
+            "The saved QuickBooks tokens can't be decrypted with the current "
+            "QBO_TOKEN_ENCRYPTION_KEY (was it changed?) - run python scripts/qbo_connect.py "
+            "to connect again."
+        ) from exc
 
 
 def _utcnow() -> datetime:
@@ -146,9 +198,9 @@ def _token_request(data: dict) -> dict:
 
 
 def _apply_tokens(connection: QboConnection, payload: dict, now: datetime) -> None:
-    connection.access_token = payload["access_token"]
+    connection.access_token = _encrypt(payload["access_token"])
     connection.access_token_expires_at = now + timedelta(seconds=int(payload.get("expires_in", 3600)))
-    connection.refresh_token = payload["refresh_token"]
+    connection.refresh_token = _encrypt(payload["refresh_token"])
     connection.refresh_token_expires_at = now + timedelta(
         seconds=int(payload.get("x_refresh_token_expires_in", 100 * 24 * 3600))
     )
@@ -157,6 +209,7 @@ def _apply_tokens(connection: QboConnection, payload: dict, now: datetime) -> No
 def connect(session: Session, code: str, realm_id: str) -> QboConnection:
     """Exchanges the one-time code from the approval redirect for tokens and
     saves the connection for this company."""
+    _require_fernet()  # before using up the one-time code
     payload = _token_request(
         {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri()}
     )
@@ -198,7 +251,16 @@ def _access_token(session: Session, force_refresh: bool = False) -> tuple[str, s
             "QuickBooks isn't connected yet - run python scripts/qbo_connect.py."
         )
     now = _utcnow()
-    token, realm_id = connection.access_token, connection.realm_id
+    token, realm_id = _decrypt(connection.access_token), connection.realm_id
+    refresh_token = _decrypt(connection.refresh_token)
+    if _fernet() is not None and not (
+        connection.access_token.startswith(ENCRYPTED_PREFIX)
+        and connection.refresh_token.startswith(ENCRYPTED_PREFIX)
+    ):
+        # Tokens saved before encryption existed: encrypt them now.
+        connection.access_token = _encrypt(token)
+        connection.refresh_token = _encrypt(refresh_token)
+        session.flush()
     if not force_refresh and connection.access_token_expires_at - now > TOKEN_REFRESH_MARGIN:
         session.commit()  # nothing changed; just release the row lock
         return token, realm_id
@@ -207,11 +269,9 @@ def _access_token(session: Session, force_refresh: bool = False) -> tuple[str, s
             "The QuickBooks authorization has expired (it lapses after about 100 days "
             "unused) - run python scripts/qbo_connect.py to connect again."
         )
-    payload = _token_request(
-        {"grant_type": "refresh_token", "refresh_token": connection.refresh_token}
-    )
+    payload = _token_request({"grant_type": "refresh_token", "refresh_token": refresh_token})
     _apply_tokens(connection, payload, now)
-    token = connection.access_token
+    token = payload["access_token"]
     session.commit()
     return token, realm_id
 

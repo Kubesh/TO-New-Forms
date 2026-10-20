@@ -3,6 +3,7 @@
 Usage:
     python scripts/qbo_connect.py            # connect
     python scripts/qbo_connect.py --status   # show the connection, test it
+    python scripts/qbo_connect.py --make-key # make a QBO_TOKEN_ENCRYPTION_KEY for .env
 
 Needs QBO_CLIENT_ID, QBO_CLIENT_SECRET (and QBO_ENVIRONMENT, QBO_REDIRECT_URI)
 in .env, and the redirect URI registered on the Intuit app. To connect:
@@ -50,6 +51,8 @@ def show_status(session) -> None:
         print("Not connected. Run: python scripts/qbo_connect.py")
         return
     print(f"Company ID (realm): {connection.realm_id}")
+    encrypted = connection.access_token.startswith(qbo.ENCRYPTED_PREFIX)
+    print(f"Tokens stored encrypted: {'yes' if encrypted else 'NO (set QBO_TOKEN_ENCRYPTION_KEY)'}")
     print(f"Access token expires:  {connection.access_token_expires_at} UTC")
     print(f"Refresh token expires: {connection.refresh_token_expires_at} UTC")
     info = qbo.company_info(session)
@@ -81,7 +84,15 @@ def connect(session) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--status", action="store_true", help="show the saved connection and test it")
+    parser.add_argument(
+        "--make-key", action="store_true", help="print a new QBO_TOKEN_ENCRYPTION_KEY and exit"
+    )
     args = parser.parse_args()
+
+    if args.make_key:
+        print("Add this line to .env (keep it secret, and don't lose it):\n")
+        print(f"QBO_TOKEN_ENCRYPTION_KEY={qbo.generate_encryption_key()}")
+        return
 
     load_dotenv()
     session = get_session()
