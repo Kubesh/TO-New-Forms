@@ -562,9 +562,7 @@ def _render_quickbooks_section(po_id: int) -> None:
             f"**Invoice #{number}** created {_format_datetime(invoice.created_at)} "
             f"· ${invoice.total_amount:,.2f}"
         )
-        st.caption(
-            "Created unsent - review it, adjust it if needed and email it from QuickBooks."
-        )
+        st.caption("Invoice created in Quickbooks.")
         if stale_total is not None:
             st.warning(
                 f"This PO's total is now ${stale_total:,.2f}, but the invoice was created at "
