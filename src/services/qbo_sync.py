@@ -428,8 +428,15 @@ def _custom_fields_from_invoices(session: Session, enhanced: bool = False) -> di
 
 
 def _looks_like_po(label: str) -> bool:
-    flat = re.sub(r"[^a-z]", "", label.lower())
-    return flat.startswith("po") or flat.startswith("purchaseorder")
+    """"PO Reference no.", "PO Number", "PONumber", "P.O. #", "Customer PO",
+    "Purchase Order"... but not "Posting date"."""
+    lowered = label.lower()
+    flat = re.sub(r"[^a-z]", "", lowered)
+    return (
+        bool(re.search(r"\bp\.?o\b", lowered))
+        or flat.startswith(("ponumber", "poref", "pono"))
+        or "purchaseorder" in flat
+    )
 
 
 def _first_po_field(fields: dict[str, str]) -> tuple[str, str] | None:
@@ -448,7 +455,8 @@ def find_po_field(session: Session) -> tuple[tuple[str, str, bool] | None, dict[
     None, every field seen). QBO_PO_CUSTOM_FIELD_ID overrides the search."""
     override = os.environ.get("QBO_PO_CUSTOM_FIELD_ID", "").strip()
     if override:
-        return (override, "PO Reference no.", False), {}
+        # Ids from 1000000001 up are the "enhanced" custom fields.
+        return (override, "PO Reference no.", override.isdigit() and int(override) >= 1_000_000_000), {}
     seen: dict[str, str] = {}
     try:
         seen.update(_custom_fields_from_preferences(session))
