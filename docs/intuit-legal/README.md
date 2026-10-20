@@ -7,7 +7,7 @@ search engines are asked to skip them.
 Parties are RZNCE LLC (developer) and Treehouse Packables LLC (customer). Before publishing, replace the
 remaining placeholders:
 
-- `[CONTACT EMAIL]` - where questions and deletion requests go
+- `adrian@rznce.com` - where questions and deletion requests go
 - `[STATE / COUNTRY]` - governing law (eula.html only)
 
 Plain-language drafts, not legal advice; have the client read them (and ideally a lawyer) once.
