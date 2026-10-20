@@ -8,7 +8,6 @@ Parties are RZNCE LLC (developer) and Treehouse Packables LLC (customer). Before
 remaining placeholders:
 
 - `adrian@rznce.com` - where questions and deletion requests go
-- `[STATE / COUNTRY]` - governing law (eula.html only)
 
 Plain-language drafts, not legal advice; have the client read them (and ideally a lawyer) once.
 
