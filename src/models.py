@@ -266,6 +266,7 @@ class QboInvoice(Base, TimestampMixin):
     doc_number: Mapped[str | None] = mapped_column(String(40))
     total_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     error: Mapped[str | None] = mapped_column(Text)
+    intuit_tid: Mapped[str | None] = mapped_column(String(64))
 
 
 class OrderShipstation(Base, TimestampMixin):

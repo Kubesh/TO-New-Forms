@@ -24,6 +24,7 @@ so pass one that has no unrelated pending changes.
 import logging
 import os
 import secrets
+import threading
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
@@ -47,6 +48,36 @@ MINOR_VERSION = "75"
 REQUEST_TIMEOUT_SECONDS = 30
 # Refresh a little early rather than race the expiry.
 TOKEN_REFRESH_MARGIN = timedelta(seconds=120)
+
+
+# Every QuickBooks response carries an intuit_tid header that Intuit's support
+# can use to trace the call. The most recent one (per thread) is kept so callers
+# can store it, and it's logged and appended to error messages.
+_last_response = threading.local()
+
+
+def last_intuit_tid() -> str | None:
+    return getattr(_last_response, "tid", None)
+
+
+def _note_response(response: requests.Response, what: str) -> str | None:
+    tid = response.headers.get("intuit_tid")
+    _last_response.tid = tid
+    if response.status_code >= 400:
+        logger.warning(
+            "QuickBooks %s -> %s (intuit_tid=%s): %s",
+            what,
+            response.status_code,
+            tid,
+            _fault_message(response),
+        )
+    else:
+        logger.debug("QuickBooks %s -> %s (intuit_tid=%s)", what, response.status_code, tid)
+    return tid
+
+
+def _with_tid(message: str, tid: str | None) -> str:
+    return f"{message} (intuit_tid {tid})" if tid else message
 
 
 class QuickBooksNotConfigured(Exception):
@@ -186,6 +217,7 @@ def _token_request(data: dict) -> dict:
         )
     except requests.RequestException as exc:
         raise QuickBooksError(f"Couldn't reach QuickBooks: {exc}") from exc
+    tid = _note_response(response, "token request")
     if response.status_code >= 400:
         detail = _fault_message(response)
         if "invalid_grant" in detail:
@@ -193,7 +225,9 @@ def _token_request(data: dict) -> dict:
                 "QuickBooks authorization has expired or was revoked - run "
                 "python scripts/qbo_connect.py to connect again."
             )
-        raise QuickBooksError(f"QuickBooks token request failed ({response.status_code}): {detail}")
+        raise QuickBooksError(
+            _with_tid(f"QuickBooks token request failed ({response.status_code}): {detail}", tid)
+        )
     return response.json()
 
 
@@ -306,14 +340,19 @@ def _request(
             )
         except requests.RequestException as exc:
             raise QuickBooksError(f"Couldn't reach QuickBooks: {exc}") from exc
+        tid = _note_response(response, f"{method} {path}")
         if response.status_code == 401 and attempt == 1:
             force_refresh = True
             continue
         if response.status_code == 429:
-            raise QuickBooksError("QuickBooks rate limit hit - wait a minute and try again.")
+            raise QuickBooksError(
+                _with_tid("QuickBooks rate limit hit - wait a minute and try again.", tid)
+            )
         if response.status_code >= 400:
             raise QuickBooksError(
-                f"QuickBooks returned {response.status_code}: {_fault_message(response)}"
+                _with_tid(
+                    f"QuickBooks returned {response.status_code}: {_fault_message(response)}", tid
+                )
             )
         return response.json()
     raise QuickBooksNotConnected(  # pragma: no cover - a second 401 returns above

@@ -609,6 +609,7 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
         if not str(exc).startswith("Couldn't reach"):
             attempt.status = "failed"
         attempt.error = str(exc)
+        attempt.intuit_tid = qb.last_intuit_tid()
         session.commit()
         raise
     invoice = data["Invoice"]
@@ -616,6 +617,7 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
     attempt.qbo_invoice_id = str(invoice["Id"])
     attempt.doc_number = invoice.get("DocNumber")
     attempt.error = None
+    attempt.intuit_tid = qb.last_intuit_tid()
     session.commit()
     session.refresh(attempt)
     attempt.po_number_filled = po_field is not None  # not stored; for the caller's message

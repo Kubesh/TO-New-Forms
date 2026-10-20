@@ -32,8 +32,12 @@ def _two_line(title: str, sub: str | None) -> str:
     return f'<div>{html.escape(title)}</div>{small}'
 
 
+SUPPORT_EMAIL = "adrian@rznce.com"
+
+
 def quickbooks_page() -> None:
     st.title("QuickBooks")
+    st.caption(f"Questions or problems with the QuickBooks connection? Contact {SUPPORT_EMAIL}.")
     tab_status, tab_customers, tab_items = st.tabs(["Connection", "Customers", "Items"])
     with tab_status:
         _render_status()

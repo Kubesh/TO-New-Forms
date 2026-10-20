@@ -1,4 +1,6 @@
+import logging
 import os
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import streamlit as st
@@ -14,6 +16,24 @@ from src.pages_app.production import production_page
 from src.pages_app.purchase_orders import purchase_orders_page
 from src.pages_app.quickbooks import quickbooks_page
 from src.pages_app.shipstation import shipstation_page
+
+# Errors (including every failed QuickBooks call, with its intuit_tid) go to a
+# rotating log file next to the app, so they can be shared for troubleshooting.
+# Streamlit re-runs this script on every interaction, so add the handler once.
+_log_dir = Path(__file__).parent / "logs"
+_app_logger = logging.getLogger("src")
+if not any(isinstance(h, RotatingFileHandler) for h in _app_logger.handlers):
+    try:
+        _log_dir.mkdir(exist_ok=True)
+        _handler = RotatingFileHandler(
+            _log_dir / "operations-app.log", maxBytes=2_000_000, backupCount=5, encoding="utf-8"
+        )
+        _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        _handler.setLevel(logging.WARNING)
+        _app_logger.addHandler(_handler)
+        _app_logger.setLevel(logging.INFO)
+    except OSError:
+        pass  # a read-only checkout shouldn't stop the app
 
 st.set_page_config(
     page_title="Treehouse Originals",
