@@ -29,7 +29,7 @@ def _render_headers() -> None:
 
 def _two_line(title: str, sub: str | None) -> str:
     small = f'<div style="font-size:0.8rem; opacity:0.65;">{html.escape(sub)}</div>' if sub else ""
-    return f'<div style="font-weight:700;">{html.escape(title)}</div>{small}'
+    return f'<div>{html.escape(title)}</div>{small}'
 
 
 def quickbooks_page() -> None:
