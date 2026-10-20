@@ -40,7 +40,7 @@ from src.services import quickbooks as qb
 from src.services.pricing import line_amount, resolve_prices
 from src.services.purchase_orders import get_purchase_order, price_unpriced_lines
 
-FAIRE_ORDER_TYPE = "faire"
+FAIRE_ORDER_TYPE = "faire"  # matches the order types "Faire", "Faire Order", ...
 SEARCH_LIMIT = 25
 
 
@@ -345,7 +345,7 @@ def _live_lines(po: PurchaseOrder):
 
 def check_invoice(session: Session, po: PurchaseOrder) -> InvoiceCheck:
     check = InvoiceCheck()
-    if (po.order_type or "").strip().lower() == FAIRE_ORDER_TYPE:
+    if FAIRE_ORDER_TYPE in (po.order_type or "").strip().lower():
         check.excluded = "Faire orders aren't invoiced in QuickBooks."
         return check
     check.invoice = get_live_invoice(session, po.po_id)
@@ -390,13 +390,8 @@ def check_invoice(session: Session, po: PurchaseOrder) -> InvoiceCheck:
 PO_FIELD_MAX_LENGTH = 31  # QuickBooks custom field values are limited to 31 characters
 
 
-def po_reference_field(session: Session) -> tuple[str, str]:
-    """(definition id, name) of the invoice custom field the PO number goes in:
-    the one named like "PO Reference no." / "PO Number" in the company's
-    sales form settings. QBO_PO_CUSTOM_FIELD_ID overrides the lookup."""
-    override = os.environ.get("QBO_PO_CUSTOM_FIELD_ID", "").strip()
-    if override:
-        return override, "PO Reference no."
+def _custom_fields_from_preferences(session: Session) -> dict[str, str]:
+    """{definition id: name} of the enabled custom fields in the sales form settings."""
     prefs = qb._request(session, "GET", "preferences").get("Preferences", {})
     groups = (prefs.get("SalesFormsPrefs") or {}).get("CustomField") or []
     names, enabled = {}, {}
@@ -407,20 +402,63 @@ def po_reference_field(session: Session) -> tuple[str, str]:
                 names[match.group(1)] = entry.get("StringValue", "")
             elif match := re.fullmatch(r"SalesFormsPrefs\.UseSalesCustom(\d+)", name):
                 enabled[match.group(1)] = bool(entry.get("BooleanValue"))
-    candidates = {k: v for k, v in names.items() if v and enabled.get(k, True)}
+    return {k: v for k, v in names.items() if v and enabled.get(k, True)}
 
-    def looks_like_po(label: str) -> bool:
-        flat = re.sub(r"[^a-z]", "", label.lower())
-        return flat.startswith("po") or flat.startswith("purchaseorder")
 
-    for definition_id, label in sorted(candidates.items()):
-        if looks_like_po(label):
+def _custom_fields_from_invoices(session: Session) -> dict[str, str]:
+    """{definition id: name} read off the company's latest invoices, which list
+    every custom field defined for invoices (empty ones too)."""
+    data = qb._request(
+        session,
+        "GET",
+        "query",
+        params={
+            "query": "select * from Invoice order by MetaData.LastUpdatedTime desc "
+            "STARTPOSITION 1 MAXRESULTS 10"
+        },
+    )
+    found: dict[str, str] = {}
+    for invoice in data.get("QueryResponse", {}).get("Invoice", []):
+        for field in invoice.get("CustomField") or []:
+            if field.get("DefinitionId") and field.get("Name"):
+                found.setdefault(str(field["DefinitionId"]), field["Name"])
+    return found
+
+
+def invoice_custom_fields(session: Session) -> dict[str, str]:
+    """The invoice custom fields QuickBooks reports: from the sales form
+    settings, and from recent invoices for any the settings didn't list."""
+    fields = {}
+    try:
+        fields.update(_custom_fields_from_preferences(session))
+    except qb.QuickBooksError:
+        pass
+    for definition_id, name in _custom_fields_from_invoices(session).items():
+        fields.setdefault(definition_id, name)
+    return fields
+
+
+def _looks_like_po(label: str) -> bool:
+    flat = re.sub(r"[^a-z]", "", label.lower())
+    return flat.startswith("po") or flat.startswith("purchaseorder")
+
+
+def po_reference_field(session: Session) -> tuple[str, str]:
+    """(definition id, name) of the invoice custom field the PO number goes in:
+    the one named like "PO Reference no." / "PO Number". QBO_PO_CUSTOM_FIELD_ID
+    overrides the lookup."""
+    override = os.environ.get("QBO_PO_CUSTOM_FIELD_ID", "").strip()
+    if override:
+        return override, "PO Reference no."
+    fields = invoice_custom_fields(session)
+    for definition_id, label in sorted(fields.items()):
+        if _looks_like_po(label):
             return definition_id, label
-    found = ", ".join(f'"{v}"' for v in candidates.values()) or "none"
+    found = ", ".join(f'{k}: "{v}"' for k, v in sorted(fields.items())) or "none"
     raise InvoiceBlocked(
         [
-            "QuickBooks has no custom field for the PO number - add one named \"PO Reference no.\" "
-            f"under Settings > Account and settings > Sales > Custom fields (found: {found})."
+            "Couldn't find QuickBooks' PO number field on invoices (custom fields QuickBooks "
+            f"reported: {found}). Set QBO_PO_CUSTOM_FIELD_ID in .env to its number if you know it."
         ]
     )
 

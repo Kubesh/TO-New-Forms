@@ -77,6 +77,22 @@ def _render_status() -> None:
     st.write(
         f"**Sellable SKUs linked:** {sum(1 for i in items if i.item_id in item_links)} of {len(items)}"
     )
+    try:
+        with session_scope() as session:
+            fields = qbo_sync.invoice_custom_fields(session)
+            try:
+                po_field = qbo_sync.po_reference_field(session)
+            except qbo_sync.InvoiceBlocked:
+                po_field = None
+    except QBO_ERRORS as exc:
+        _show_error(exc)
+        return
+    listed = ", ".join(f'{k}: "{v}"' for k, v in sorted(fields.items())) or "none found"
+    st.write(
+        f"**PO number goes in:** "
+        + (f"\"{po_field[1]}\" (field {po_field[0]})" if po_field else "not found - invoices are blocked")
+    )
+    st.caption(f"Invoice custom fields QuickBooks reports: {listed}")
 
 
 # --- shared dialogs ---------------------------------------------------------
