@@ -405,18 +405,20 @@ def _custom_fields_from_preferences(session: Session) -> dict[str, str]:
     return {k: v for k, v in names.items() if v and enabled.get(k, True)}
 
 
-def _custom_fields_from_invoices(session: Session) -> dict[str, str]:
+ENHANCED_CUSTOM_FIELDS = "enhancedAllCustomFields"
+
+
+def _custom_fields_from_invoices(session: Session, enhanced: bool = False) -> dict[str, str]:
     """{definition id: name} read off the company's latest invoices, which list
-    every custom field defined for invoices (empty ones too)."""
-    data = qb._request(
-        session,
-        "GET",
-        "query",
-        params={
-            "query": "select * from Invoice order by MetaData.LastUpdatedTime desc "
-            "STARTPOSITION 1 MAXRESULTS 10"
-        },
-    )
+    the custom fields defined for invoices (empty ones too). Without
+    `enhanced`, QuickBooks only reports a few of them; with it, all."""
+    params = {
+        "query": "select * from Invoice order by MetaData.LastUpdatedTime desc "
+        "STARTPOSITION 1 MAXRESULTS 10"
+    }
+    if enhanced:
+        params["include"] = ENHANCED_CUSTOM_FIELDS
+    data = qb._request(session, "GET", "query", params=params)
     found: dict[str, str] = {}
     for invoice in data.get("QueryResponse", {}).get("Invoice", []):
         for field in invoice.get("CustomField") or []:
@@ -425,40 +427,57 @@ def _custom_fields_from_invoices(session: Session) -> dict[str, str]:
     return found
 
 
-def invoice_custom_fields(session: Session) -> dict[str, str]:
-    """The invoice custom fields QuickBooks reports: from the sales form
-    settings, and from recent invoices for any the settings didn't list."""
-    fields = {}
-    try:
-        fields.update(_custom_fields_from_preferences(session))
-    except qb.QuickBooksError:
-        pass
-    for definition_id, name in _custom_fields_from_invoices(session).items():
-        fields.setdefault(definition_id, name)
-    return fields
-
-
 def _looks_like_po(label: str) -> bool:
     flat = re.sub(r"[^a-z]", "", label.lower())
     return flat.startswith("po") or flat.startswith("purchaseorder")
 
 
-def po_reference_field(session: Session) -> tuple[str, str]:
-    """(definition id, name) of the invoice custom field the PO number goes in:
-    the one named like "PO Reference no." / "PO Number". QBO_PO_CUSTOM_FIELD_ID
-    overrides the lookup."""
-    override = os.environ.get("QBO_PO_CUSTOM_FIELD_ID", "").strip()
-    if override:
-        return override, "PO Reference no."
-    fields = invoice_custom_fields(session)
+def _first_po_field(fields: dict[str, str]) -> tuple[str, str] | None:
     for definition_id, label in sorted(fields.items()):
         if _looks_like_po(label):
             return definition_id, label
-    found = ", ".join(f'{k}: "{v}"' for k, v in sorted(fields.items())) or "none"
+    return None
+
+
+def find_po_field(session: Session) -> tuple[tuple[str, str, bool] | None, dict[str, str]]:
+    """Looks for the invoice field the PO number goes in (named like "PO
+    Reference no." / "PO Number"): in the sales form settings, then on recent
+    invoices, then on recent invoices again asking for all the custom fields
+    (QuickBooks hides some - including, on some companies, the PO one - unless
+    asked). Returns ((definition id, name, needs the enhanced parameter) or
+    None, every field seen). QBO_PO_CUSTOM_FIELD_ID overrides the search."""
+    override = os.environ.get("QBO_PO_CUSTOM_FIELD_ID", "").strip()
+    if override:
+        return (override, "PO Reference no.", False), {}
+    seen: dict[str, str] = {}
+    try:
+        seen.update(_custom_fields_from_preferences(session))
+    except qb.QuickBooksError:
+        pass
+    seen.update({k: v for k, v in _custom_fields_from_invoices(session).items() if k not in seen})
+    if found := _first_po_field(seen):
+        return (*found, False), seen
+    enhanced = _custom_fields_from_invoices(session, enhanced=True)
+    seen.update({k: v for k, v in enhanced.items() if k not in seen})
+    if found := _first_po_field(enhanced):
+        return (*found, True), seen
+    return None, seen
+
+
+def invoice_custom_fields(session: Session) -> dict[str, str]:
+    return find_po_field(session)[1]
+
+
+def po_reference_field(session: Session) -> tuple[str, str, bool]:
+    """(definition id, name, enhanced) of the invoice field for the PO number."""
+    found, seen = find_po_field(session)
+    if found:
+        return found
+    listed = ", ".join(f'{k}: "{v}"' for k, v in sorted(seen.items())) or "none"
     raise InvoiceBlocked(
         [
             "Couldn't find QuickBooks' PO number field on invoices (custom fields QuickBooks "
-            f"reported: {found}). Set QBO_PO_CUSTOM_FIELD_ID in .env to its number if you know it."
+            f"reported: {listed}). Set QBO_PO_CUSTOM_FIELD_ID in .env to its number if you know it."
         ]
     )
 
@@ -467,7 +486,7 @@ def build_invoice_payload(
     po: PurchaseOrder,
     qbo_customer_id: str,
     item_links: dict[int, QboItemLink],
-    po_field: tuple[str, str] | None = None,
+    po_field: tuple[str, str, bool] | None = None,
 ) -> dict:
     lines = []
     for line in _live_lines(po):
@@ -489,7 +508,7 @@ def build_invoice_payload(
         "PrivateNote": "Created from Treehouse Operations App",
     }
     if po_field:
-        definition_id, name = po_field
+        definition_id, name, _ = po_field
         payload["CustomField"] = [
             {
                 "DefinitionId": definition_id,
@@ -579,7 +598,14 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
     session.commit()
 
     try:
-        data = qb._request(session, "POST", "invoice", json=payload, request_id=attempt.request_id)
+        data = qb._request(
+            session,
+            "POST",
+            "invoice",
+            json=payload,
+            request_id=attempt.request_id,
+            params={"include": ENHANCED_CUSTOM_FIELDS} if po_field[2] else None,
+        )
     except qb.QuickBooksError as exc:
         # "Couldn't reach" means the outcome is unknown: leave it pending so a
         # retry reuses the request id. Anything else is a definite refusal.
