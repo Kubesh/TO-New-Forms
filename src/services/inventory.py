@@ -1,7 +1,8 @@
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import case, func, select
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from src.models import Category, InventoryCount, InventoryCountItem, Item
+from src.services.categories import load_category_chain
 
 
 def _latest_count_subquery():
@@ -30,19 +31,27 @@ def list_inventory(session: Session, query: str | None = None) -> list[tuple[Ite
     """(item, current_on_hand) pairs - current_on_hand is None for an item
     that's never been counted."""
     latest = _latest_count_subquery()
-    TopCategory = Category.__table__.alias("top_category")
+    ParentCategory = aliased(Category)
+    Grandparent = aliased(Category)
     stmt = (
         select(Item, latest.c.counted)
         .outerjoin(latest, latest.c.item_id == Item.item_id)
         .outerjoin(Category, Item.category_id == Category.category_id)
-        .outerjoin(TopCategory, Category.parent_id == TopCategory.c.category_id)
-        .options(selectinload(Item.category).selectinload(Category.parent))
+        .outerjoin(ParentCategory, Category.parent_id == ParentCategory.category_id)
+        .outerjoin(Grandparent, ParentCategory.parent_id == Grandparent.category_id)
+        .options(load_category_chain(selectinload(Item.category)))
     )
     if query:
         stmt = stmt.where(Item.name.ilike(f"%{query}%") | Item.sku.ilike(f"%{query}%"))
     stmt = stmt.order_by(
         Item.sellable.desc(),
-        func.coalesce(TopCategory.c.name, Category.name),
+        # The topmost of the item's category and its ancestors, then the line.
+        func.coalesce(Grandparent.name, ParentCategory.name, Category.name),
+        case(
+            (Grandparent.category_id.isnot(None), ParentCategory.name),
+            (ParentCategory.category_id.isnot(None), Category.name),
+            else_="",
+        ),
         Category.name,
         Item.name,
     )

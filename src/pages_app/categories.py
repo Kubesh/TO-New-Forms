@@ -1,16 +1,19 @@
 import html
 
 import streamlit as st
+from sqlalchemy.exc import IntegrityError
 
 from src.db import session_scope
 from src.services.categories import (
+    SELLABLE_CATEGORY_NAME,
+    category_path,
     create_category,
     get_category,
+    is_sellable_root,
     list_items_in_category,
     list_subcategories,
     list_top_level_categories,
-    subcategory_name,
-    update_category,
+        update_category,
 )
 
 DEFAULT_COLOR = "#F4591A"
@@ -72,6 +75,10 @@ def categories_page() -> None:
             _render_detail(category_id)
             return
 
+    # Clicking "Categories" in the sidebar re-runs this page but leaves the
+    # browser URL as it was, so clear a stale category_id (as the Customers
+    # page does).
+    st.query_params.clear()
     _render_list()
 
 
@@ -130,8 +137,23 @@ def _render_detail(category_id: int) -> None:
                     st.query_params.clear()
                     st.rerun()
                 return
-            subcategories = list_subcategories(session, category_id)
-            items = list_items_in_category(session, category_id)
+            # Subcategories and sub sub categories live in tabs on their top-level
+            # category's page, so an old link to one lands there.
+            root = category_path(category)[0]
+            subcategories = list_subcategories(session, root.category_id)
+            sellable = is_sellable_root(root)
+            all_items = list_items_in_category(session, root.category_id)
+            per_sub = {}
+            for sub in subcategories:
+                form_factors = list_subcategories(session, sub.category_id) if sellable else []
+                per_sub[sub.category_id] = (
+                    list_items_in_category(session, sub.category_id),
+                    form_factors,
+                    {
+                        ff.category_id: list_items_in_category(session, ff.category_id)
+                        for ff in form_factors
+                    },
+                )
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -142,41 +164,64 @@ def _render_detail(category_id: int) -> None:
             st.query_params.clear()
             st.rerun()
     with col_edit:
-        if st.button("Edit category", width="stretch"):
-            edit_category_dialog(category_id)
+        if st.button("Edit category", width="stretch", disabled=sellable):
+            edit_category_dialog(root.category_id)
 
-    color = category.color or "#1A1712"
+    color = root.color or "#1A1712"
     st.markdown(
         f'<span class="cat-swatch" style="display:inline-block; width:1rem; height:1rem; '
         f'border-radius:999px; border:1px solid rgba(26,23,18,0.3); '
         f'background:{color}; margin-right:0.5rem; vertical-align:middle;"></span>'
-        f'<span style="font-size:1.6rem; font-weight:800;">{html.escape(category.name)}</span>',
+        f'<span style="font-size:1.6rem; font-weight:800;">{html.escape(root.name)}</span>',
         unsafe_allow_html=True,
     )
+    if sellable:
+        st.caption(
+            f"{SELLABLE_CATEGORY_NAME} is locked - it can't be renamed. Add subcategories "
+            "(lines) here and sub sub categories inside each one; pricing is set on these."
+        )
 
-    if st.button("+ Add Subcategory", key="cat_add_sub"):
-        add_category_dialog(parent_id=category.category_id, parent_name=category.name)
+    if st.button("+ Add subcategory", key="cat_add_sub"):
+        add_category_dialog(parent_id=root.category_id, parent_name=root.name)
 
-    tab_labels = ["All Items"] + [sub.name for sub in subcategories]
-    tabs = st.tabs(tab_labels)
-
+    tabs = st.tabs(["All items"] + [sub.name for sub in subcategories])
     with tabs[0]:
-        _render_item_list(items, show_subcategory=True)
+        _render_item_list(all_items, show_subcategory=True)
 
-    if subcategories:
-        try:
-            with session_scope() as session:
-                items_by_subcategory = {
-                    sub.name: list_items_in_category(session, sub.category_id)
-                    for sub in subcategories
-                }
-        except RuntimeError as exc:
-            st.error(str(exc))
-            return
+    for sub, tab in zip(subcategories, tabs[1:]):
+        sub_items, form_factors, ff_items = per_sub[sub.category_id]
+        with tab:
+            col_edit_sub, col_add_ff = st.columns(2)
+            with col_edit_sub:
+                if st.button(
+                    "Edit subcategory", width="stretch", key=f"cat_edit_btn_{sub.category_id}"
+                ):
+                    edit_category_dialog(sub.category_id)
+            if sellable:
+                with col_add_ff:
+                    if st.button(
+                        "+ Add sub sub category", width="stretch", key=f"cat_add_ff_{sub.category_id}"
+                    ):
+                        add_category_dialog(
+                            parent_id=sub.category_id,
+                            parent_name=sub.name,
+                            child_label="Sub sub category",
+                        )
 
-        for sub, tab in zip(subcategories, tabs[1:]):
-            with tab:
-                _render_item_list(items_by_subcategory[sub.name], show_subcategory=False)
+            if not form_factors:
+                _render_item_list(sub_items, show_subcategory=False)
+                continue
+
+            ff_tabs = st.tabs(["All items"] + [ff.name for ff in form_factors])
+            with ff_tabs[0]:
+                _render_item_list(sub_items, show_subcategory=True)
+            for ff, ff_tab in zip(form_factors, ff_tabs[1:]):
+                with ff_tab:
+                    if st.button(
+                        "Edit sub sub category", key=f"cat_edit_btn_{ff.category_id}"
+                    ):
+                        edit_category_dialog(ff.category_id)
+                    _render_item_list(ff_items[ff.category_id], show_subcategory=False)
 
 
 def _render_item_list(items, show_subcategory: bool) -> None:
@@ -184,8 +229,8 @@ def _render_item_list(items, show_subcategory: bool) -> None:
         st.caption("No items here yet.")
         return
     for item in items:
-        item_subcategory = subcategory_name(item.category)
-        subcat = f" — {item_subcategory}" if show_subcategory and item_subcategory else ""
+        below_top = [c.name for c in category_path(item.category)[1:]]
+        subcat = f" — {' › '.join(below_top)}" if show_subcategory and below_top else ""
         st.markdown(
             f'<a href="/items?item_id={item.item_id}" target="_self" '
             f'style="color: inherit; text-decoration: none;">'
@@ -197,9 +242,11 @@ def _render_item_list(items, show_subcategory: bool) -> None:
 
 
 @st.dialog("Add category")
-def add_category_dialog(parent_id: int | None = None, parent_name: str | None = None) -> None:
+def add_category_dialog(
+    parent_id: int | None = None, parent_name: str | None = None, child_label: str = "Subcategory"
+) -> None:
     if parent_name:
-        st.caption(f"Subcategory of {parent_name}")
+        st.caption(f"{child_label} of {parent_name}")
 
     name = st.text_input("Name*", key="cat_add_name")
 
@@ -213,14 +260,22 @@ def add_category_dialog(parent_id: int | None = None, parent_name: str | None = 
             if not name.strip():
                 st.error("Name is required.")
             else:
-                with session_scope() as session:
-                    create_category(
-                        session,
-                        name.strip(),
-                        parent_id=parent_id,
-                        color=color if parent_id is None else None,
+                try:
+                    with session_scope() as session:
+                        create_category(
+                            session,
+                            name.strip(),
+                            parent_id=parent_id,
+                            color=color if parent_id is None else None,
+                        )
+                except (ValueError, IntegrityError) as exc:
+                    st.error(
+                        str(exc)
+                        if isinstance(exc, ValueError)
+                        else "A category with that name already exists here."
                     )
-                st.rerun()
+                else:
+                    st.rerun()
     with col_cancel:
         if st.button("Cancel", width="stretch", key="cat_add_cancel"):
             st.rerun()
@@ -250,14 +305,22 @@ def edit_category_dialog(category_id: int) -> None:
             if not name.strip():
                 st.error("Name is required.")
             else:
-                with session_scope() as session:
-                    update_category(
-                        session,
-                        category_id,
-                        name=name.strip(),
-                        color=color if is_top_level else category.color,
+                try:
+                    with session_scope() as session:
+                        update_category(
+                            session,
+                            category_id,
+                            name=name.strip(),
+                            color=color if is_top_level else category.color,
+                        )
+                except (ValueError, IntegrityError) as exc:
+                    st.error(
+                        str(exc)
+                        if isinstance(exc, ValueError)
+                        else "A category with that name already exists here."
                     )
-                st.rerun()
+                else:
+                    st.rerun()
     with col_cancel:
         if st.button("Cancel", width="stretch", key=f"cat_edit_{category_id}_cancel"):
             st.rerun()

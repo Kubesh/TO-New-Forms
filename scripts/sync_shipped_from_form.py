@@ -150,7 +150,7 @@ def process_responses(conn, args, rows) -> tuple[int, int]:
                 "SELECT po_id, po_number, ship_date, voided FROM po_headers "
                 "WHERE upper(ltrim(trim(po_number), '#')) = upper(:po)"
             ),
-            {"po": po_number.lstrip("#").strip()},
+            {"po": po_number.strip().lstrip("#").strip()},
         ).all()
         if len(matches) > 1:
             logger.warning(

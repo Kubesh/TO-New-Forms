@@ -33,15 +33,22 @@ class SheetsSyncNotConfigured(Exception):
     """Raised when the Google Sheets env vars haven't been set up yet."""
 
 
-@lru_cache(maxsize=1)
-def _get_service():
-    creds_file = os.environ.get("GOOGLE_SHEETS_CREDENTIALS_FILE")
-    if not creds_file:
-        raise SheetsSyncNotConfigured("GOOGLE_SHEETS_CREDENTIALS_FILE is not set.")
+@lru_cache(maxsize=None)
+def build_service(creds_file: str):
+    """Sheets API client for a service-account key file. Cached per file, so
+    the customers sync and the PO sync share one client when they use the
+    same credentials."""
     credentials = service_account.Credentials.from_service_account_file(
         creds_file, scopes=SCOPES
     )
     return build("sheets", "v4", credentials=credentials, cache_discovery=False)
+
+
+def _get_service():
+    creds_file = os.environ.get("GOOGLE_SHEETS_CREDENTIALS_FILE")
+    if not creds_file:
+        raise SheetsSyncNotConfigured("GOOGLE_SHEETS_CREDENTIALS_FILE is not set.")
+    return build_service(creds_file)
 
 
 def _spreadsheet_id() -> str:

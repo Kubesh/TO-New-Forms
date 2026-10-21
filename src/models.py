@@ -1,12 +1,16 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import BigInteger, Boolean, Float, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
+
+
+# Category > subcategory > sub sub category (enforced in src/services/categories.py).
+MAX_CATEGORY_DEPTH = 3
 
 
 class TimestampMixin:
@@ -22,6 +26,7 @@ class CustomerType(Base, TimestampMixin):
     customer_type_id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     notes: Mapped[str | None] = mapped_column(Text)
+    color: Mapped[str | None] = mapped_column(String(20))
 
     customers: Mapped[list["Customer"]] = relationship(back_populates="customer_type")
 
@@ -128,6 +133,9 @@ class PurchaseOrder(Base, TimestampMixin):
     order_entry_timestamp: Mapped[datetime | None] = mapped_column()
     note: Mapped[str | None] = mapped_column(Text)
     voided: Mapped[bool] = mapped_column(default=False, server_default="false")
+    # The QuickBooks invoice number: typed in by hand, or filled in when the app
+    # creates the invoice.
+    invoice_number: Mapped[str | None] = mapped_column(String(50))
 
     customer: Mapped["Customer | None"] = relationship()
     line_items: Mapped[list["PurchaseOrderLineItem"]] = relationship(
@@ -151,9 +159,149 @@ class PurchaseOrderLineItem(Base, TimestampMixin):
     expanded_weight: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     box: Mapped[str | None] = mapped_column(String(50))
     shopify_item_number: Mapped[str | None] = mapped_column(String(50))
+    # The per-case price this line was entered at (see ItemPrice), kept here so
+    # a later price change doesn't rewrite an old PO. NULL for lines entered
+    # before pricing existed, or for an item with no price yet.
+    unit_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    price_source: Mapped[str | None] = mapped_column(String(20))
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="line_items")
     item: Mapped["Item | None"] = relationship(back_populates="line_items")
+
+
+class ItemPrice(Base, TimestampMixin):
+    """A per-case price, for one item (a SKU) or for a category (a line or form
+    factor - every item under it). Scope is a customer (their own price), a
+    customer type (every customer of that type), or neither (the default)."""
+
+    __tablename__ = "item_prices"
+
+    item_price_id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("items.item_id", ondelete="CASCADE"))
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("categories.category_id", ondelete="CASCADE")
+    )
+    customer_type_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer_types.customer_type_id", ondelete="CASCADE")
+    )
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.customer_id", ondelete="CASCADE")
+    )
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+
+
+class CategoryExclusion(Base, TimestampMixin):
+    """A category (and everything under it) that isn't sold to a customer type
+    or to a single customer."""
+
+    __tablename__ = "category_exclusions"
+
+    category_exclusion_id: Mapped[int] = mapped_column(primary_key=True)
+    category_id: Mapped[int] = mapped_column(
+        ForeignKey("categories.category_id", ondelete="CASCADE"), nullable=False
+    )
+    customer_type_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer_types.customer_type_id", ondelete="CASCADE")
+    )
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.customer_id", ondelete="CASCADE")
+    )
+
+
+class AppSetting(Base):
+    """A small setting edited in the app (see src/services/app_settings.py)."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+
+
+class QboConnection(Base, TimestampMixin):
+    """The authorised QuickBooks Online company. Tokens are rotated by Intuit
+    on every refresh, so the latest ones must always be the ones saved."""
+
+    __tablename__ = "qbo_connection"
+
+    qbo_connection_id: Mapped[int] = mapped_column(primary_key=True)
+    environment: Mapped[str] = mapped_column(String(20), nullable=False)
+    realm_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    access_token_expires_at: Mapped[datetime] = mapped_column(nullable=False)
+    refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token_expires_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class QboCustomerLink(Base, TimestampMixin):
+    """An app customer's QuickBooks customer, in one QuickBooks company
+    (realm). Keyed by realm so sandbox and real links can coexist."""
+
+    __tablename__ = "qbo_customer_link"
+
+    qbo_customer_link_id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(
+        ForeignKey("customers.customer_id", ondelete="CASCADE"), nullable=False
+    )
+    realm_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    qbo_customer_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    qbo_display_name: Mapped[str | None] = mapped_column(String(255))
+
+
+class QboItemLink(Base, TimestampMixin):
+    """An app item's QuickBooks product/service, in one QuickBooks company."""
+
+    __tablename__ = "qbo_item_link"
+
+    qbo_item_link_id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("items.item_id", ondelete="CASCADE"), nullable=False
+    )
+    realm_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    qbo_item_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    qbo_item_name: Mapped[str | None] = mapped_column(String(255))
+
+
+class QboInvoice(Base, TimestampMixin):
+    """An attempt to create a QuickBooks invoice from a PO (see migration 0030)."""
+
+    __tablename__ = "qbo_invoices"
+
+    qbo_invoice_record_id: Mapped[int] = mapped_column(primary_key=True)
+    po_id: Mapped[int] = mapped_column(
+        ForeignKey("po_headers.po_id", ondelete="CASCADE"), nullable=False
+    )
+    realm_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    qbo_customer_id: Mapped[str | None] = mapped_column(String(40))
+    qbo_invoice_id: Mapped[str | None] = mapped_column(String(40))
+    doc_number: Mapped[str | None] = mapped_column(String(40))
+    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    error: Mapped[str | None] = mapped_column(Text)
+    intuit_tid: Mapped[str | None] = mapped_column(String(64))
+
+
+class OrderShipstation(Base, TimestampMixin):
+    """One row each time a PO is sent to ShipStation (so a PO can be sent
+    more than once). label_created_at / tracking_number are filled in later
+    by scripts/shipstation_sync.py once the label is printed in ShipStation -
+    that is not the same as the order having physically shipped."""
+
+    __tablename__ = "order_shipstation"
+
+    order_shipstation_id: Mapped[int] = mapped_column(primary_key=True)
+    po_id: Mapped[int] = mapped_column(
+        ForeignKey("po_headers.po_id", ondelete="CASCADE"), nullable=False
+    )
+    shipstation_order_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    order_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    order_number: Mapped[str | None] = mapped_column(String(50))
+    sent_at: Mapped[datetime] = mapped_column(nullable=False)
+    label_created_at: Mapped[datetime | None] = mapped_column()
+    tracking_number: Mapped[str | None] = mapped_column(String(100))
+    carrier_code: Mapped[str | None] = mapped_column(String(50))
+    last_checked_at: Mapped[datetime | None] = mapped_column()
 
 
 class OrderShippingMaterial(Base, TimestampMixin):
@@ -169,9 +317,8 @@ class OrderShippingMaterial(Base, TimestampMixin):
 
 
 class Category(Base, TimestampMixin):
-    """Both top-level categories and subcategories live in this one table -
-    a subcategory is just a row whose parent_id points at its parent
-    category's row. color is only really meaningful for top-level rows
+    """Categories, subcategories (lines) and sub sub categories all live in this one
+    table - each is just a row whose parent_id points at its parent's row. color is only really meaningful for top-level rows
     (it drives the card-indicator color everywhere categories are shown)
     but isn't restricted at the schema level."""
 
@@ -182,8 +329,15 @@ class Category(Base, TimestampMixin):
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("categories.category_id"))
     color: Mapped[str | None] = mapped_column(String(20))
 
+    # Eager (joined), so the whole ancestor chain is available after the
+    # session closes, whichever way the Category itself was loaded.
     parent: Mapped["Category | None"] = relationship(
-        remote_side="Category.category_id", back_populates="subcategories"
+        remote_side="Category.category_id",
+        back_populates="subcategories",
+        lazy="joined",
+        # One past the top level, so a top-level row's own parent (None) is
+        # loaded too rather than left to lazy-load after the session closes.
+        join_depth=MAX_CATEGORY_DEPTH + 1,
     )
     subcategories: Mapped[list["Category"]] = relationship(back_populates="parent")
 

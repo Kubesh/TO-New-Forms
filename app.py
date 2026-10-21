@@ -1,3 +1,6 @@
+import logging
+import os
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import streamlit as st
@@ -5,13 +8,33 @@ import streamlit as st
 from src.pages_app.assemblies import assemblies_page
 from src.pages_app.batches import batches_page
 from src.pages_app.categories import categories_page
+from src.pages_app.customer_types import customer_types_page
 from src.pages_app.customers import customers_page
 from src.pages_app.google_sheets import google_sheets_page
-from src.pages_app.integrations import integrations_page
 from src.pages_app.inventory import inventory_page
 from src.pages_app.items import items_page
 from src.pages_app.production import production_page
 from src.pages_app.purchase_orders import purchase_orders_page
+from src.pages_app.quickbooks import quickbooks_page
+from src.pages_app.shipstation import shipstation_page
+
+# Errors (including every failed QuickBooks call, with its intuit_tid) go to a
+# rotating log file next to the app, so they can be shared for troubleshooting.
+# Streamlit re-runs this script on every interaction, so add the handler once.
+_log_dir = Path(__file__).parent / "logs"
+_app_logger = logging.getLogger("src")
+if not any(isinstance(h, RotatingFileHandler) for h in _app_logger.handlers):
+    try:
+        _log_dir.mkdir(exist_ok=True)
+        _handler = RotatingFileHandler(
+            _log_dir / "operations-app.log", maxBytes=2_000_000, backupCount=5, encoding="utf-8"
+        )
+        _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        _handler.setLevel(logging.WARNING)
+        _app_logger.addHandler(_handler)
+        _app_logger.setLevel(logging.INFO)
+    except OSError:
+        pass  # a read-only checkout shouldn't stop the app
 
 st.set_page_config(
     page_title="Treehouse Originals",
@@ -65,6 +88,22 @@ st.markdown(
         font-size: 1.15rem;
         font-family: initial !important;
         line-height: 1;
+    }
+    /* Same icon-font problem on expanders (e.g. the PO "Send history"):
+    the font override above turns the chevron's ligature into literal text
+    like "keyboard_arrow_right" drawn over the label, so hide it and draw
+    the arrow as a plain character instead. */
+    [data-testid="stExpander"] summary [data-testid="stIconMaterial"] {
+        font-size: 0 !important;
+    }
+    [data-testid="stExpander"] summary [data-testid="stIconMaterial"]::before {
+        content: "\\25B8";
+        font-size: 1rem;
+        font-family: initial !important;
+        line-height: 1;
+    }
+    [data-testid="stExpander"] details[open] summary [data-testid="stIconMaterial"]::before {
+        content: "\\25BE";
     }
     [data-testid="stSidebar"] {
         border-right: 2px solid #1A1712 !important;
@@ -169,6 +208,14 @@ st.markdown(
         margin-left: 1.1rem;
         font-size: 0.78rem;
     }
+    .tp-sidebar-section {
+        margin: 1.1rem 0 0.25rem 0.5rem;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        opacity: 0.55;
+    }
     .tp-sidebar-brand {
         padding-bottom: 1rem;
         margin-bottom: 0.75rem;
@@ -205,6 +252,9 @@ st.markdown(
 )
 
 customers = st.Page(customers_page, title="Customers", url_path="customers", default=True)
+customer_types = st.Page(
+    customer_types_page, title="Customer Types", url_path="customer-types"
+)
 purchase_orders = st.Page(
     purchase_orders_page, title="Purchase Orders", url_path="purchase-orders"
 )
@@ -214,23 +264,33 @@ items = st.Page(items_page, title="Items", url_path="items")
 production = st.Page(production_page, title="Production", url_path="production")
 assemblies = st.Page(assemblies_page, title="Assemblies", url_path="assemblies")
 batches = st.Page(batches_page, title="Batches", url_path="batches")
-integrations = st.Page(integrations_page, title="Integrations", url_path="integrations")
+quickbooks = st.Page(quickbooks_page, title="QuickBooks", url_path="quickbooks")
+shipstation = st.Page(shipstation_page, title="ShipStation", url_path="shipstation")
 google_sheets = st.Page(google_sheets_page, title="Google Sheets", url_path="google-sheets")
 
 # Build the nav ourselves (position="hidden") so the sidebar always renders,
 # rather than relying on Streamlit's auto nav widget, which hides itself
 # whenever there's only a single page.
-pg = st.navigation(
-    {
-        "Customers": [customers],
-        "Purchase Orders": [purchase_orders],
-        "Inventory": [inventory, categories],
-        "Items": [items],
-        "Production": [production, assemblies, batches],
-        "Integrations": [integrations, google_sheets],
-    },
-    position="hidden",
+# The Production section (Production, Assemblies, Batches) isn't shown to the
+# client yet. A page left out of st.navigation isn't routable at all, so its
+# URL can't be reached directly either. Set SHOW_PRODUCTION=1 to bring it back.
+show_production = os.environ.get("SHOW_PRODUCTION", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
 )
+
+nav_sections = {
+    "Customers": [customers, customer_types],
+    "Purchase Orders": [purchase_orders],
+    "Inventory": [inventory, categories],
+    "Items": [items],
+    "Integrations": [quickbooks, shipstation, google_sheets],
+}
+if show_production:
+    nav_sections["Production"] = [production, assemblies, batches]
+
+pg = st.navigation(nav_sections, position="hidden")
 
 with st.sidebar:
     st.markdown(
@@ -247,18 +307,22 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.page_link(customers, label="Customers")
+    with st.container(key="tp-sidebar-subnav-customers"):
+        st.page_link(customer_types, label="Customer Types")
     st.page_link(purchase_orders, label="Purchase Orders")
     st.page_link(inventory, label="Inventory")
     with st.container(key="tp-sidebar-subnav"):
         st.page_link(categories, label="Categories")
     st.page_link(items, label="Items")
-    st.page_link(production, label="Production")
-    with st.container(key="tp-sidebar-subnav-production"):
-        st.page_link(assemblies, label="Assemblies")
-        st.page_link(batches, label="Batches")
-    st.page_link(integrations, label="Integrations")
-    with st.container(key="tp-sidebar-subnav-integrations"):
-        st.page_link(google_sheets, label="Google Sheets")
+    st.markdown('<div class="tp-sidebar-section">Integrations</div>', unsafe_allow_html=True)
+    st.page_link(quickbooks, label="QuickBooks")
+    st.page_link(shipstation, label="ShipStation")
+    st.page_link(google_sheets, label="Google Sheets")
+    if show_production:
+        st.page_link(production, label="Production")
+        with st.container(key="tp-sidebar-subnav-production"):
+            st.page_link(assemblies, label="Assemblies")
+            st.page_link(batches, label="Batches")
 
     # Streamlit's page navigation is a client-side transition, not a full
     # page reload, so the sidebar's open/closed state survives it - on

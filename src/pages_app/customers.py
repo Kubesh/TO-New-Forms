@@ -20,6 +20,8 @@ from src.services.customers import (
     search_customers,
     update_customer,
 )
+from src.pages_app.pricing_editor import render_pricing
+from src.pages_app.quickbooks import link_customer_dialog
 from src.pages_app.purchase_orders import create_po_dialog, render_po_table
 from src.services.order_types import list_order_type_choices
 from src.services.purchase_orders import (
@@ -27,6 +29,8 @@ from src.services.purchase_orders import (
     get_po_line_item_stats,
     list_purchase_orders_for_customer,
 )
+from src.services import qbo_sync
+from src.services import quickbooks as qb
 from src.services.sheets_sync import SheetsSyncNotConfigured, sync_customer
 
 logger = logging.getLogger(__name__)
@@ -169,6 +173,11 @@ def customers_page() -> None:
             _render_detail(customer_id)
             return
 
+    # Clicking "Customers" in the sidebar re-runs this page without a
+    # customer_id, but Streamlit leaves the browser URL as it was (still
+    # ?customer_id=<last one>). Clearing here syncs the URL with what's on
+    # screen so a stale customer_id can't be picked up again.
+    st.query_params.clear()
     _render_list()
 
 
@@ -388,41 +397,78 @@ def _render_detail(customer_id: int) -> None:
     if customer.store_key is not None:
         st.caption(f"Previous store key: {customer.store_key}")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Billing")
-        _render_address(customer, "billing")
-    with col2:
-        st.subheader("Shipping")
-        _render_address(customer, "shipping")
+    tab_details, tab_pricing = st.tabs(["Details", "Pricing"])
+    with tab_details:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Billing")
+            _render_address(customer, "billing")
+        with col2:
+            st.subheader("Shipping")
+            _render_address(customer, "shipping")
 
-    st.subheader("Contacts")
-    if customer.contacts:
-        for contact in customer.contacts:
-            with st.container(border=True):
-                st.write(f"**{contact.contact_name}**")
-                if contact.contact_phone:
-                    st.write(contact.contact_phone)
-                if contact.contact_notes:
-                    st.caption(contact.contact_notes)
+        st.subheader("Contacts")
+        if customer.contacts:
+            for contact in customer.contacts:
+                with st.container(border=True):
+                    st.write(f"**{contact.contact_name}**")
+                    if contact.contact_phone:
+                        st.write(contact.contact_phone)
+                    if contact.contact_notes:
+                        st.caption(contact.contact_notes)
+        else:
+            st.write("No contacts on file.")
+
+        if customer.children:
+            st.subheader("Sub-accounts")
+            for child in customer.children:
+                st.write(f"- {child.customer_name}")
+
+        _render_quickbooks_link(customer)
+
+        col_po_header, col_po_create = st.columns([3, 1])
+        with col_po_header:
+            st.subheader("Purchase Orders")
+        with col_po_create:
+            if st.button("Create purchase order", width="stretch", key="create_po_btn"):
+                create_po_dialog(customer.customer_id)
+        if purchase_orders:
+            render_po_table(purchase_orders, po_stats, href_base="/purchase-orders")
+        else:
+            st.write("No purchase orders on file.")
+
+    with tab_pricing:
+        render_pricing(customer_id=customer.customer_id, key=f"pricing_customer_{customer.customer_id}")
+
+
+def _render_quickbooks_link(customer) -> None:
+    """Which QuickBooks customer this customer is invoiced under. Stores of a
+    parent account are billed through the parent, so the link lives there."""
+    st.subheader("QuickBooks")
+    try:
+        with session_scope() as session:
+            bill = qbo_sync.billing_customer(get_customer(session, customer.customer_id))
+            bill_id, bill_name = bill.customer_id, bill.customer_name
+            link = qbo_sync.get_customer_link(session, bill_id)
+            connected = qb.get_connection(session) is not None
+    except (qb.QuickBooksNotConfigured, qb.QuickBooksNotConnected, qb.QuickBooksError) as exc:
+        st.caption(f"QuickBooks isn't available: {exc}")
+        return
+    if not connected:
+        st.caption("QuickBooks isn't connected yet.")
+        return
+    is_child = bill_id != customer.customer_id
+    if is_child:
+        st.write(f"Invoiced through the parent account **{bill_name}**.")
+    if link:
+        st.write(f"QuickBooks customer: **{link.qbo_display_name or link.qbo_customer_id}**")
     else:
-        st.write("No contacts on file.")
-
-    if customer.children:
-        st.subheader("Sub-accounts")
-        for child in customer.children:
-            st.write(f"- {child.customer_name}")
-
-    col_po_header, col_po_create = st.columns([3, 1])
-    with col_po_header:
-        st.subheader("Purchase Orders")
-    with col_po_create:
-        if st.button("Create purchase order", width="stretch", key="create_po_btn"):
-            create_po_dialog(customer.customer_id)
-    if purchase_orders:
-        render_po_table(purchase_orders, po_stats, href_base="/purchase-orders")
-    else:
-        st.write("No purchase orders on file.")
+        st.write("Not linked to a QuickBooks customer - invoices can't be created yet.")
+    if st.button(
+        "Change link" if link else "Link to QuickBooks",
+        key=f"qbo_link_btn_{bill_id}",
+    ):
+        link_customer_dialog(bill_id)
 
 
 def _render_address(customer, prefix: str) -> None:
