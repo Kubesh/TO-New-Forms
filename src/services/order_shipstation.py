@@ -1,3 +1,5 @@
+import time
+from collections import defaultdict
 from datetime import datetime
 
 from sqlalchemy import select
@@ -81,6 +83,29 @@ def refresh_labels(session: Session, shipstation_order_id: int, sends: list[Orde
             send.carrier_code = label["carrier_code"]
     session.commit()
     return bool(labels)
+
+
+# ShipStation allows 40 API calls a minute; 1.6s apart stays just under it.
+SECONDS_BETWEEN_CALLS = 1.6
+
+
+def check_all_labels(session: Session, on_progress=None) -> dict:
+    """Asks ShipStation about every send that has no label yet (live POs only)
+    and records what it finds. Returns {"checked", "found"}; raises
+    ShipStationError (e.g. rate limit) after saving what was found so far.
+    `on_progress(done, total)` is called after each order."""
+    by_order: dict[int, list[OrderShipstation]] = defaultdict(list)
+    for send in list_sends_awaiting_label(session, datetime.min):
+        by_order[send.shipstation_order_id].append(send)
+    found = 0
+    for done, (order_id, sends) in enumerate(by_order.items(), start=1):
+        if done > 1:
+            time.sleep(SECONDS_BETWEEN_CALLS)
+        if refresh_labels(session, order_id, sends):
+            found += 1
+        if on_progress:
+            on_progress(done, len(by_order))
+    return {"checked": len(by_order), "found": found}
 
 
 def list_recent_sends(session: Session, limit: int = 50) -> list[tuple[OrderShipstation, str]]:

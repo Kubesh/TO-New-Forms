@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from src.db import session_scope
-from src.services.order_shipstation import list_recent_sends
+from src.services.order_shipstation import check_all_labels, list_recent_sends
 from src.services.app_settings import set_setting
 from src.services.shipstation import (
     ShipStationError,
@@ -62,6 +62,7 @@ def shipstation_page() -> None:
     _render_shipping_method()
 
     st.subheader("Recent sends")
+    _render_check_labels()
     try:
         with session_scope() as session:
             sends = list_recent_sends(session, 50)
@@ -78,12 +79,38 @@ def shipstation_page() -> None:
                 "Sent": _format(send.sent_at),
                 "ShipStation order": send.order_number or send.shipstation_order_id,
                 "Label created": _format(send.label_created_at),
+                "Carrier": send.carrier_code or "",
                 "Tracking": send.tracking_number or "",
             }
             for send, po_number in sends
         ]
     )
     st.dataframe(frame, hide_index=True, width="stretch")
+
+
+def _render_check_labels() -> None:
+    if st.button("Check ShipStation", key="ss_check_all"):
+        progress = st.progress(0.0, text="Checking ShipStation…")
+
+        def on_progress(done: int, total: int) -> None:
+            progress.progress(done / total, text=f"Checked {done} of {total} orders…")
+
+        try:
+            with session_scope() as session:
+                result = check_all_labels(session, on_progress)
+        except (ShipStationNotConfigured, ShipStationError) as exc:
+            progress.empty()
+            st.error(str(exc))
+        else:
+            progress.empty()
+            if result["checked"] == 0:
+                st.info("No orders are waiting on a label.")
+            else:
+                st.success(
+                    f"Checked {result['checked']} order(s) without a label: "
+                    f"{result['found']} now have one."
+                )
+    st.caption("Looks up label, tracking and carrier for every sent order that doesn't have a label yet.")
 
 
 def _is_fedex(option: dict) -> bool:
