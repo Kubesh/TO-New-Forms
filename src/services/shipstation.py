@@ -38,9 +38,17 @@ class ShipStationError(Exception):
 def order_key_for(po: PurchaseOrder, sequence: int = 1) -> str:
     """Unique per send. Each send of a PO is its own order in ShipStation
     (ShipStation updates an existing order when it sees the same orderKey, so
-    reusing the key would fold a re-send into the first order and the labels
-    couldn't be told apart). The first send keeps the plain "PO-<id>" key."""
-    return f"PO-{po.po_id}" if sequence == 1 else f"PO-{po.po_id}-{sequence}"
+    reusing a key would fold a send into some other order and the labels
+    couldn't be told apart).
+
+    The key carries the PO's creation time as well as its id: several
+    databases (a test copy, the live one) can hand out the same po_id while
+    sending to the same ShipStation account, and a bare "PO-<id>" from one
+    would silently update the other's order - the first send then 'doesn't
+    go through' while a later "PO-<id>-2" does."""
+    stamp = po.created_at.strftime("%y%m%d%H%M%S") if po.created_at else "0"
+    base = f"PO-{po.po_id}-{stamp}"
+    return base if sequence == 1 else f"{base}-{sequence}"
 
 
 def order_number_for(po: PurchaseOrder, sequence: int = 1) -> str:
@@ -265,9 +273,27 @@ def send_order(po: PurchaseOrder, sequence: int = 1, shipping: dict | None = Non
     """Creates a new order in ShipStation for this send of the PO. Returns
     ShipStation's order record, which includes 'orderId'. `shipping` (see
     configured_shipping_method) sets the carrier and service on the order."""
-    return _request(
+    order = _request(
         "POST", "/orders/createorder", json=build_order_payload(po, sequence, shipping)
     )
+    _refuse_if_existing_order_was_updated(order)
+    return order
+
+
+def _refuse_if_existing_order_was_updated(order: dict) -> None:
+    """createorder updates (rather than creates) an order whose orderKey already
+    exists. A brand-new order has createDate == modifyDate; if they're far
+    apart this call modified an older order, which must not be recorded as a
+    new send of this PO."""
+    created, modified = _parse_timestamp(order.get("createDate")), _parse_timestamp(
+        order.get("modifyDate")
+    )
+    if created and modified and (modified - created).total_seconds() > 300:
+        raise ShipStationError(
+            f"ShipStation already had an order with this key (order #{order.get('orderNumber')}, "
+            f"created {created:%m/%d/%y %I:%M %p}) and updated it instead of creating a new one. "
+            "Check that order in ShipStation."
+        )
 
 
 def list_carriers() -> list[dict]:
