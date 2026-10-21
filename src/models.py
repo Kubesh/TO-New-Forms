@@ -133,6 +133,9 @@ class PurchaseOrder(Base, TimestampMixin):
     order_entry_timestamp: Mapped[datetime | None] = mapped_column()
     note: Mapped[str | None] = mapped_column(Text)
     voided: Mapped[bool] = mapped_column(default=False, server_default="false")
+    # The QuickBooks invoice number: typed in by hand, or filled in when the app
+    # creates the invoice.
+    invoice_number: Mapped[str | None] = mapped_column(String(50))
 
     customer: Mapped["Customer | None"] = relationship()
     line_items: Mapped[list["PurchaseOrderLineItem"]] = relationship(

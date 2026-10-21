@@ -3,12 +3,45 @@ from datetime import datetime
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from src.models import Customer, Item, PurchaseOrder, PurchaseOrderLineItem
+from src.models import (
+    Customer,
+    Item,
+    OrderShipstation,
+    PurchaseOrder,
+    PurchaseOrderLineItem,
+)
 from src.services.categories import load_category_chain
 from src.services.pricing import resolve_price, resolve_prices
 
 
-def _apply_po_filters(stmt, query: str | None = None, customer_id: int | None = None):
+def _yes_no(stmt, condition, wanted: bool | None):
+    """wanted True keeps rows matching `condition`, False the others, None all."""
+    if wanted is None:
+        return stmt
+    return stmt.where(condition if wanted else ~condition)
+
+
+def _apply_po_filters(
+    stmt,
+    query: str | None = None,
+    customer_id: int | None = None,
+    invoiced: bool | None = None,
+    sent_to_shipstation: bool | None = None,
+    shipped: bool | None = None,
+):
+    stmt = _yes_no(
+        stmt,
+        func.coalesce(func.trim(PurchaseOrder.invoice_number), "") != "",
+        invoiced,
+    )
+    stmt = _yes_no(
+        stmt,
+        select(OrderShipstation.order_shipstation_id)
+        .where(OrderShipstation.po_id == PurchaseOrder.po_id)
+        .exists(),
+        sent_to_shipstation,
+    )
+    stmt = _yes_no(stmt, PurchaseOrder.ship_date.isnot(None), shipped)
     if query:
         stmt = stmt.where(
             or_(
@@ -22,10 +55,20 @@ def _apply_po_filters(stmt, query: str | None = None, customer_id: int | None = 
 
 
 def count_purchase_orders(
-    session: Session, query: str | None = None, customer_id: int | None = None
+    session: Session,
+    query: str | None = None,
+    customer_id: int | None = None,
+    invoiced: bool | None = None,
+    sent_to_shipstation: bool | None = None,
+    shipped: bool | None = None,
 ) -> int:
     stmt = _apply_po_filters(
-        select(func.count()).select_from(PurchaseOrder), query, customer_id
+        select(func.count()).select_from(PurchaseOrder),
+        query,
+        customer_id,
+        invoiced,
+        sent_to_shipstation,
+        shipped,
     )
     return session.scalar(stmt) or 0
 
@@ -36,9 +79,12 @@ def search_purchase_orders(
     customer_id: int | None = None,
     limit: int | None = None,
     offset: int = 0,
+    invoiced: bool | None = None,
+    sent_to_shipstation: bool | None = None,
+    shipped: bool | None = None,
 ) -> list[PurchaseOrder]:
     stmt = select(PurchaseOrder).options(joinedload(PurchaseOrder.customer))
-    stmt = _apply_po_filters(stmt, query, customer_id)
+    stmt = _apply_po_filters(stmt, query, customer_id, invoiced, sent_to_shipstation, shipped)
     stmt = stmt.order_by(PurchaseOrder.order_date.desc().nulls_last(), PurchaseOrder.po_number)
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)
@@ -214,3 +260,23 @@ def price_unpriced_lines(session: Session, po_id: int) -> int:
     if filled:
         session.commit()
     return filled
+
+
+def po_ids_sent_to_shipstation(session: Session, po_ids) -> set[int]:
+    """Which of these POs have been sent to ShipStation at least once."""
+    po_ids = list(po_ids)
+    if not po_ids:
+        return set()
+    return set(
+        session.scalars(
+            select(OrderShipstation.po_id).where(OrderShipstation.po_id.in_(po_ids)).distinct()
+        )
+    )
+
+
+def set_invoice_number(session: Session, po_id: int, invoice_number: str | None) -> None:
+    po = session.get(PurchaseOrder, po_id)
+    if po is None:
+        return
+    po.invoice_number = (invoice_number or "").strip() or None
+    session.commit()

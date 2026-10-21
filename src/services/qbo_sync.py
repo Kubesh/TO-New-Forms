@@ -618,6 +618,8 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
     attempt.doc_number = invoice.get("DocNumber")
     attempt.error = None
     attempt.intuit_tid = qb.last_intuit_tid()
+    if attempt.doc_number and not (po.invoice_number or "").strip():
+        po.invoice_number = attempt.doc_number
     session.commit()
     session.refresh(attempt)
     attempt.po_number_filled = po_field is not None  # not stored; for the caller's message

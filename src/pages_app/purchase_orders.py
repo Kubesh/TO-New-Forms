@@ -11,7 +11,7 @@ from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
 from src.services import qbo_sync
 from src.services import quickbooks as qb
-from src.services.order_shipstation import list_sends_for_po, record_send, refresh_labels
+from src.services.order_shipstation import list_sends_for_po, refresh_labels, send_po
 from src.services.order_types import list_order_type_names, resolve_default_order_type
 from src.services.pricing import line_amount, order_total
 from src.services.po_sheets_sync import SheetLayoutError, remove_line_items, sync_purchase_order
@@ -23,23 +23,16 @@ from src.services.purchase_orders import (
     delete_purchase_order,
     get_po_line_item_stats,
     get_purchase_order,
+    po_ids_sent_to_shipstation,
     search_purchase_orders,
+    set_invoice_number,
     ship_purchase_order,
     update_line_item_quantities,
     update_purchase_order,
 )
 from src.services.sheets_sync import SheetsSyncNotConfigured
 from src.services.shipping_materials import list_shipping_materials_for_po, replace_shipping_materials
-from src.services.shipstation import (
-    configured_shipping_method,
-    ShipStationError,
-    ShipStationNotConfigured,
-    next_sequence,
-    order_key_for,
-    order_number_for,
-    order_weight_lb,
-    send_order,
-)
+from src.services.shipstation import ShipStationError, ShipStationNotConfigured
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +72,12 @@ PO_CARD_CSS = """
 .po-card-link:hover .po-card {
     border-color: #F4591A;
 }
+.po-card-shipped {
+    border-color: #15803d;
+}
+.po-card-link:hover .po-card-shipped {
+    border-color: #166534;
+}
 .po-card-voided {
     border-color: #b91c1c;
 }
@@ -94,7 +93,7 @@ PO_CARD_CSS = """
     with a wider column than its neighbors, throwing off alignment between
     rows and against the header. 145px comfortably fits the longest PO
     numbers we see without wrapping (paired with nowrap below). */
-    grid-template-columns: 95px 145px minmax(120px, 1fr) 75px 75px 120px;
+    grid-template-columns: 90px 130px minmax(110px, 1fr) 65px 70px 200px;
     gap: 0.5rem;
     align-items: center;
 }
@@ -149,6 +148,33 @@ PO_CARD_CSS = """
         opacity: 0.55;
         text-align: left;
     }
+}
+.po-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 999px;
+    border: 1.5px solid currentColor;
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.po-icon-invoice {
+    color: #15803d !important;
+}
+.po-icon-label {
+    color: #2563eb !important;
+    border: none;
+    width: 1.5rem;
+}
+.po-icon svg {
+    width: 1.2rem;
+    height: 1.2rem;
+}
+[class*="st-key-porow-"] {
+    margin-bottom: -0.55rem;
 }
 .po-badge {
     display: inline-block;
@@ -278,14 +304,41 @@ def purchase_orders_page() -> None:
     _render_list()
 
 
+YES_NO_OPTIONS = ["All", "Yes", "No"]
+
+
+def _yes_no_value(choice: str) -> bool | None:
+    return {"Yes": True, "No": False}.get(choice)
+
+
 def _render_list() -> None:
+    flash = st.session_state.pop("po_list_flash", None)
+    if flash:
+        kind, message = flash
+        (st.success if kind == "success" else st.warning if kind == "warning" else st.error)(message)
+
     query = st.text_input(
         "Search purchase orders",
         placeholder="Search by PO number or customer name…",
         label_visibility="collapsed",
     )
+    col_invoiced, col_label, col_shipped = st.columns(3)
+    with col_invoiced:
+        invoiced_choice = st.selectbox("Invoiced", YES_NO_OPTIONS, key="po_filter_invoiced")
+    with col_label:
+        label_choice = st.selectbox(
+            "Shipping label created", YES_NO_OPTIONS, key="po_filter_label",
+            help="Has been sent to ShipStation.",
+        )
+    with col_shipped:
+        shipped_choice = st.selectbox("Shipped", YES_NO_OPTIONS, key="po_filter_shipped")
+    invoiced, sent, shipped = (
+        _yes_no_value(invoiced_choice),
+        _yes_no_value(label_choice),
+        _yes_no_value(shipped_choice),
+    )
 
-    filters_key = query
+    filters_key = (query, invoiced, sent, shipped)
     if st.session_state.get("po_filters_key") != filters_key:
         st.session_state["po_filters_key"] = filters_key
         st.session_state["po_page"] = 1
@@ -293,19 +346,30 @@ def _render_list() -> None:
 
     try:
         with session_scope() as session:
-            total = count_purchase_orders(session, query)
+            total = count_purchase_orders(
+                session, query, invoiced=invoiced, sent_to_shipstation=sent, shipped=shipped
+            )
             total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
             page = min(max(page, 1), total_pages)
             st.session_state["po_page"] = page
 
             if total:
                 purchase_orders = search_purchase_orders(
-                    session, query, limit=PAGE_SIZE, offset=(page - 1) * PAGE_SIZE
+                    session,
+                    query,
+                    limit=PAGE_SIZE,
+                    offset=(page - 1) * PAGE_SIZE,
+                    invoiced=invoiced,
+                    sent_to_shipstation=sent,
+                    shipped=shipped,
                 )
-                stats = get_po_line_item_stats(session, [po.po_id for po in purchase_orders])
+                po_ids = [po.po_id for po in purchase_orders]
+                stats = get_po_line_item_stats(session, po_ids)
+                sent_ids = po_ids_sent_to_shipstation(session, po_ids)
             else:
                 purchase_orders = []
                 stats = {}
+                sent_ids = set()
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -314,9 +378,123 @@ def _render_list() -> None:
         st.info("No purchase orders found.")
         return
 
-    render_po_table(purchase_orders, stats)
+    # After a bulk send the ticked boxes are cleared - done here, before the
+    # checkboxes are created, since a widget's state can't be set after that.
+    if st.session_state.pop("po_clear_selection", False):
+        for po in purchase_orders:
+            st.session_state[f"po_sel_{po.po_id}"] = False
+
+    selected_ids = [po.po_id for po in purchase_orders if st.session_state.get(f"po_sel_{po.po_id}")]
+    col_info, col_send = st.columns([3, 1])
+    with col_info:
+        st.caption(
+            f"{len(selected_ids)} selected" if selected_ids else "Tick orders to send them to ShipStation."
+        )
+    with col_send:
+        if st.button(
+            "Send to ShipStation",
+            type="primary",
+            width="stretch",
+            disabled=not selected_ids,
+            key="po_bulk_send_btn",
+        ):
+            _start_bulk_send(selected_ids)
+
+    render_po_table(purchase_orders, stats, sent_po_ids=sent_ids, selectable=True)
 
     _render_pagination(page, total_pages, total)
+
+
+def _start_bulk_send(po_ids: list[int]) -> None:
+    """Sorts the ticked POs into ones that can't be sent, ones never sent and ones
+    already sent; asks before sending the already-sent ones again."""
+    never_sent, already_sent, skipped = [], [], []
+    with session_scope() as session:
+        sent_before = po_ids_sent_to_shipstation(session, po_ids)
+        for po_id in po_ids:
+            po = get_purchase_order(session, po_id)
+            if po is None:
+                continue
+            if po.voided or po.ship_date is not None:
+                skipped.append(f"{po.po_number} ({'voided' if po.voided else 'already shipped'})")
+            elif po.customer is None:
+                skipped.append(f"{po.po_number} (no customer)")
+            elif po_id in sent_before:
+                already_sent.append((po_id, po.po_number))
+            else:
+                never_sent.append(po_id)
+    if already_sent:
+        bulk_send_confirm_dialog(already_sent, never_sent, skipped)
+    else:
+        _run_bulk_send(never_sent, skipped)
+
+
+def _run_bulk_send(po_ids: list[int], skipped: list[str]) -> None:
+    sent, failed, no_weight = [], [], 0
+    aborted = None
+    with st.spinner("Sending to ShipStation…"):
+        for po_id in po_ids:
+            try:
+                with session_scope() as session:
+                    result = send_po(session, po_id)
+                    number = get_purchase_order(session, po_id).po_number
+            except ShipStationNotConfigured as exc:
+                aborted = str(exc)
+                break
+            except ShipStationError as exc:
+                with session_scope() as session:
+                    po = get_purchase_order(session, po_id)
+                failed.append(f"{po.po_number if po else po_id}: {exc}")
+                continue
+            sent.append(number)
+            if result["weight_lb"] is None:
+                no_weight += 1
+
+    parts = []
+    if sent:
+        parts.append(f"Sent {len(sent)} order{'' if len(sent) == 1 else 's'} to ShipStation.")
+    if no_weight:
+        parts.append(
+            f"{no_weight} had no weight on file - enter it in ShipStation before printing labels."
+        )
+    if skipped:
+        parts.append("Skipped: " + "; ".join(skipped) + ".")
+    if failed:
+        parts.append("Failed - " + " | ".join(failed))
+    if aborted:
+        parts.append(aborted)
+    if not parts:
+        parts.append("Nothing to send.")
+    kind = "error" if (failed or aborted) and not sent else "warning" if (failed or aborted or skipped) else "success"
+    st.session_state["po_list_flash"] = (kind, " ".join(parts))
+    st.session_state["po_clear_selection"] = True
+    st.rerun()
+
+
+@st.dialog("Some orders were already sent", width="small")
+def bulk_send_confirm_dialog(
+    already_sent: list[tuple[int, str]], never_sent: list[int], skipped: list[str]
+) -> None:
+    numbers = ", ".join(number for _, number in already_sent)
+    st.write(
+        f"Some of these orders have already been sent to ShipStation: **{numbers}**. "
+        "Sending again creates another order there for each - the earlier ones aren't changed."
+    )
+    if never_sent:
+        st.caption(
+            f"{len(never_sent)} other order{' hasn' if len(never_sent) == 1 else 's haven'}'t been sent yet."
+        )
+    col_again, col_skip, col_cancel = st.columns(3)
+    with col_again:
+        if st.button("Send again", type="primary", width="stretch", key="bulk_send_again"):
+            _run_bulk_send(never_sent + [po_id for po_id, _ in already_sent], skipped)
+    with col_skip:
+        if st.button("Skip", width="stretch", disabled=not never_sent, key="bulk_send_skip",
+                     help="Send only the ones that haven't been sent before."):
+            _run_bulk_send(never_sent, skipped + [f"{n} (already sent)" for _, n in already_sent])
+    with col_cancel:
+        if st.button("Cancel", width="stretch", key="bulk_send_cancel"):
+            st.rerun()
 
 
 def _render_pagination(page: int, total_pages: int, total: int) -> None:
@@ -342,14 +520,24 @@ def _render_pagination(page: int, total_pages: int, total: int) -> None:
             st.rerun()
 
 
-def render_po_table(purchase_orders, stats_by_po_id: dict, href_base: str = "") -> None:
+def render_po_table(
+    purchase_orders,
+    stats_by_po_id: dict,
+    href_base: str = "",
+    sent_po_ids: set[int] | None = None,
+    selectable: bool = False,
+) -> None:
     """Shared PO list markup, used by both the Purchase Orders page and the
     customer detail page's Purchase Orders section, so the two always match.
 
     href_base is prepended to each row's link - "" for same-page navigation
     (the PO list page itself), "/purchase-orders" for linking in from a
     different page (e.g. the customer detail page).
+
+    sent_po_ids marks POs already sent to ShipStation (a label icon);
+    selectable puts a checkbox in front of each row (key po_sel_<po_id>).
     """
+    sent_po_ids = sent_po_ids or set()
     header_labels = ["PO Date", "PO Number", "Customer", "Total SKUs", "Total Units", "Order Type"]
     header = (
         '<div class="po-table-header">'
@@ -357,16 +545,40 @@ def render_po_table(purchase_orders, stats_by_po_id: dict, href_base: str = "") 
         + "</div>"
     )
 
-    rows_html = "".join(
-        _po_row_html(po, stats_by_po_id.get(po.po_id), href_base) for po in purchase_orders
-    )
-    st.markdown(
-        f'{PO_CARD_CSS}{header}<div class="po-card-list">{rows_html}</div>',
-        unsafe_allow_html=True,
-    )
+    def row_html(po) -> str:
+        return _po_row_html(po, stats_by_po_id.get(po.po_id), href_base, po.po_id in sent_po_ids)
+
+    if not selectable:
+        rows_html = "".join(row_html(po) for po in purchase_orders)
+        st.markdown(
+            f'{PO_CARD_CSS}{header}<div class="po-card-list">{rows_html}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    box_width = [1, 24]
+    col_box, col_header = st.columns(box_width)
+    with col_header:
+        st.markdown(f"{PO_CARD_CSS}{header}", unsafe_allow_html=True)
+    for po in purchase_orders:
+        with st.container(key=f"porow-{po.po_id}"):
+            col_box, col_card = st.columns(box_width, vertical_alignment="center")
+            with col_box:
+                st.checkbox(
+                    f"Select {po.po_number}", key=f"po_sel_{po.po_id}", label_visibility="collapsed"
+                )
+            with col_card:
+                st.markdown(f'<div class="po-card-list" style="padding-top:0">{row_html(po)}</div>', unsafe_allow_html=True)
 
 
-def _po_row_html(po, stats, href_base: str) -> str:
+LABEL_ICON_SVG = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+    'stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" '
+    'rx="2"/><path d="M7 9v6M10 9v6M13 9v6M16 9v6M18 9v6"/></svg>'
+)
+
+
+def _po_row_html(po, stats, href_base: str, sent: bool = False) -> str:
     number = html.escape(po.po_number)
     total_skus, total_units = stats if stats else (0, None)
     customer_name = html.escape(po.customer.customer_name) if po.customer else "—"
@@ -374,10 +586,19 @@ def _po_row_html(po, stats, href_base: str) -> str:
     card_classes = "po-card"
     if po.voided:
         card_classes += " po-card-voided"
+    elif po.ship_date is not None:
+        card_classes += " po-card-shipped"
 
     type_cell = [_order_type_badge_html(po.order_type)]
     if po.voided:
         type_cell.append('<span class="po-badge po-badge-voided">Voided</span>')
+    if (po.invoice_number or "").strip():
+        invoice_title = html.escape(f"Invoice {po.invoice_number.strip()}")
+        type_cell.append(f'<span class="po-icon po-icon-invoice" title="{invoice_title}">$</span>')
+    if sent:
+        type_cell.append(
+            f'<span class="po-icon po-icon-label" title="Sent to ShipStation">{LABEL_ICON_SVG}</span>'
+        )
 
     row = (
         '<div class="po-row-grid">'
@@ -456,6 +677,26 @@ def _render_detail(po_id: int) -> None:
         st.write(f"**Due date:** {_format_date(po.due_date)}")
     with col3:
         st.write(f"**Requested ship date:** {_format_date(po.requested_ship_date)}")
+
+    col_invoice, col_invoice_btn = st.columns([3, 1], vertical_alignment="bottom")
+    with col_invoice:
+        invoice_text = st.text_input(
+            "Invoice number",
+            value=po.invoice_number or "",
+            max_chars=50,
+            key=f"po_invoice_number_{po.po_id}",
+        )
+    with col_invoice_btn:
+        if st.button(
+            "Save invoice number",
+            width="stretch",
+            disabled=invoice_text.strip() == (po.invoice_number or ""),
+            key=f"po_invoice_number_save_{po.po_id}",
+        ):
+            with session_scope() as session:
+                set_invoice_number(session, po.po_id, invoice_text)
+            st.toast("Invoice number saved.")
+            st.rerun()
 
     col_ship_date, col_ship_btn = st.columns([3, 1])
     with col_ship_date:
@@ -698,20 +939,12 @@ def _send_po_to_shipstation(po_id: int) -> None:
     try:
         with st.spinner("Sending to ShipStation…"):
             with session_scope() as session:
-                po = get_purchase_order(session, po_id)
-                if po is None or po.voided or po.ship_date is not None:
-                    raise ShipStationError("This PO can't be sent - it's voided or already shipped.")
-                existing_keys = {send.order_key for send in list_sends_for_po(session, po_id)}
-                sequence = next_sequence(po, existing_keys)
-                shipping = configured_shipping_method(session)
-                order = send_order(po, sequence, shipping)
-                record_send(
-                    session, po, order, order_key_for(po, sequence), order_number_for(po, sequence)
-                )
-                weight_lb, missing_weight_skus = order_weight_lb(po)
+                result = send_po(session, po_id)
     except (ShipStationNotConfigured, ShipStationError) as exc:
         st.session_state["shipstation_flash"] = ("error", str(exc))
     else:
+        order, shipping = result["order"], result["shipping"]
+        weight_lb, missing_weight_skus = result["weight_lb"], result["missing_weight_skus"]
         message = f"Sent to ShipStation (order ID {order['orderId']})."
         if shipping:
             message += f" Shipping method: {shipping['name']}."

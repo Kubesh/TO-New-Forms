@@ -4,7 +4,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.models import OrderShipstation, PurchaseOrder
-from src.services.shipstation import get_labels_for_order
+from src.services.purchase_orders import get_purchase_order
+from src.services.shipstation import (
+    ShipStationError,
+    configured_shipping_method,
+    get_labels_for_order,
+    next_sequence,
+    order_key_for,
+    order_number_for,
+    order_weight_lb,
+    send_order,
+)
 
 
 def list_sends_for_po(session: Session, po_id: int) -> list[OrderShipstation]:
@@ -81,3 +91,19 @@ def list_recent_sends(session: Session, limit: int = 50) -> list[tuple[OrderShip
         .limit(limit)
     )
     return [(send, po_number) for send, po_number in session.execute(stmt).all()]
+
+
+def send_po(session: Session, po_id: int) -> dict:
+    """Sends a PO to ShipStation as a new order and records the send. Returns
+    {"order", "shipping", "weight_lb", "missing_weight_skus"}; raises
+    ShipStationError / ShipStationNotConfigured."""
+    po = get_purchase_order(session, po_id)
+    if po is None or po.voided or po.ship_date is not None:
+        raise ShipStationError("This PO can't be sent - it's voided or already shipped.")
+    existing_keys = {send.order_key for send in list_sends_for_po(session, po_id)}
+    sequence = next_sequence(po, existing_keys)
+    shipping = configured_shipping_method(session)
+    order = send_order(po, sequence, shipping)
+    record_send(session, po, order, order_key_for(po, sequence), order_number_for(po, sequence))
+    weight_lb, missing = order_weight_lb(po)
+    return {"order": order, "shipping": shipping, "weight_lb": weight_lb, "missing_weight_skus": missing}
