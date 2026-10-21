@@ -28,6 +28,7 @@ from src.services.purchase_orders import (
     search_purchase_orders,
     set_invoice_number,
     ship_purchase_order,
+    unship_purchase_order,
     update_line_item_quantities,
     update_purchase_order,
 )
@@ -81,7 +82,7 @@ PO_CARD_CSS = """
     border-color: #F4591A;
 }
 .po-card-shipped {
-    background: rgba(34, 160, 80, 0.20);
+    background: rgba(34, 160, 80, 0.16);
 }
 .po-card-voided {
     border-color: #b91c1c;
@@ -416,11 +417,11 @@ def _render_list() -> None:
             f"{' and '.join(types)} orders aren't sent to ShipStation, so "
             f"{', '.join(blocked_selected)} will be skipped."
         )
-    col_info, col_send = st.columns([3, 1])
-    with col_info:
-        st.caption(
-            f"{len(selected_ids)} selected" if selected_ids else "Tick orders to send them to ShipStation."
-        )
+    col_label, col_send, col_ship, col_unship, _ = st.columns(
+        [1, 1.6, 1.3, 1.4, 1.2], vertical_alignment="center"
+    )
+    with col_label:
+        st.write("Bulk actions:")
     with col_send:
         if st.button(
             "Send to ShipStation",
@@ -430,10 +431,72 @@ def _render_list() -> None:
             key="po_bulk_send_btn",
         ):
             _start_bulk_send(selected_ids)
+    with col_ship:
+        if st.button(
+            "Mark as shipped", width="stretch", disabled=not selected_ids, key="po_bulk_ship_btn"
+        ):
+            bulk_ship_confirm_dialog(selected_ids, True)
+    with col_unship:
+        if st.button(
+            "Mark as unshipped", width="stretch", disabled=not selected_ids, key="po_bulk_unship_btn"
+        ):
+            bulk_ship_confirm_dialog(selected_ids, False)
 
     render_po_table(purchase_orders, stats, sent_po_ids=sent_ids, selectable=True)
 
     _render_pagination(page, total_pages, total)
+
+
+def _run_bulk_ship(po_ids: list[int], shipped: bool) -> None:
+    """Marks the POs shipped (or not shipped), skipping the ones it doesn't apply to."""
+    done, skipped = [], []
+    for po_id in po_ids:
+        with session_scope() as session:
+            po = get_purchase_order(session, po_id)
+            if po is None:
+                continue
+            number = po.po_number
+            if shipped and po.voided:
+                skipped.append(f"{number} (voided)")
+                continue
+            if shipped and po.ship_date is not None:
+                skipped.append(f"{number} (already shipped)")
+                continue
+            if not shipped and po.ship_date is None:
+                skipped.append(f"{number} (not shipped)")
+                continue
+            changed = (
+                ship_purchase_order(session, po_id) if shipped else unship_purchase_order(session, po_id)
+            )
+        if changed is None:
+            skipped.append(f"{number} (couldn't be changed)")
+            continue
+        _sync_po_to_sheet(po_id)
+        done.append(number)
+
+    word = "shipped" if shipped else "not shipped"
+    parts = []
+    if done:
+        parts.append(f"Marked {len(done)} order{'' if len(done) == 1 else 's'} as {word}.")
+    if skipped:
+        parts.append("Skipped: " + "; ".join(skipped) + ".")
+    st.session_state["po_list_flash"] = ("warning" if skipped else "success", " ".join(parts) or "Nothing to change.")
+    st.session_state["po_clear_selection"] = True
+    st.rerun()
+
+
+@st.dialog("Mark orders", width="small")
+def bulk_ship_confirm_dialog(po_ids: list[int], shipped: bool) -> None:
+    count = len(po_ids)
+    word = "shipped" if shipped else "not shipped"
+    st.write(f"Mark {count} selected order{'' if count == 1 else 's'} as {word}?")
+    col_yes, col_no = st.columns(2)
+    with col_yes:
+        if st.button("Yes", type="primary", width="stretch", key="bulk_ship_yes"):
+            _run_bulk_ship(po_ids, shipped)
+    with col_no:
+        if st.button("Cancel", width="stretch", key="bulk_ship_cancel"):
+            st.rerun()
 
 
 def _start_bulk_send(po_ids: list[int]) -> None:
@@ -738,6 +801,8 @@ def _render_detail(po_id: int) -> None:
         if po.ship_date is None:
             if st.button("Ship PO", width="stretch", key="ship_po_btn"):
                 ship_po_confirm_dialog(po.po_id, po.po_number)
+        elif st.button("Mark as unshipped", width="stretch", key="unship_po_btn"):
+            unship_po_confirm_dialog(po.po_id, po.po_number)
 
     if po.note:
         st.write(f"**Note:** {po.note}")
@@ -1054,6 +1119,24 @@ def ship_po_confirm_dialog(po_id: int, po_number: str) -> None:
                 st.rerun()
     with col_no:
         if st.button("No", width="stretch", key=f"po_ship_{po_id}_no"):
+            st.rerun()
+
+
+@st.dialog("Mark PO as not shipped", width="small")
+def unship_po_confirm_dialog(po_id: int, po_number: str) -> None:
+    st.write(f"Mark PO {po_number} as not shipped? Its ship date will be cleared.")
+    col_yes, col_no = st.columns(2)
+    with col_yes:
+        if st.button("Yes", type="primary", width="stretch", key=f"po_unship_{po_id}_yes"):
+            with session_scope() as session:
+                changed = unship_purchase_order(session, po_id)
+            if changed is None:
+                st.error("Couldn't change this PO - it may not be shipped.")
+            else:
+                _sync_po_to_sheet(po_id)
+                st.rerun()
+    with col_no:
+        if st.button("No", width="stretch", key=f"po_unship_{po_id}_no"):
             st.rerun()
 
 

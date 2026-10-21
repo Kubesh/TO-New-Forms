@@ -192,6 +192,18 @@ def ship_purchase_order(session: Session, po_id: int) -> PurchaseOrder | None:
     return po
 
 
+def unship_purchase_order(session: Session, po_id: int) -> PurchaseOrder | None:
+    """Clears a PO's ship date (it goes back to not shipped). Returns None
+    (no-op) if the PO doesn't exist or isn't shipped."""
+    po = session.get(PurchaseOrder, po_id)
+    if po is None or po.ship_date is None:
+        return None
+    po.ship_date = None
+    session.commit()
+    session.refresh(po)
+    return po
+
+
 def delete_purchase_order(session: Session, po_id: int) -> bool:
     """Deletes a PO (and its line items / shipping materials, via cascade).
     Only allowed once the PO is voided and was never shipped - callers should
