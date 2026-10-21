@@ -29,7 +29,14 @@ def _apply_po_filters(
     sent_to_shipstation: bool | None = None,
     shipped: bool | None = None,
     order_type: str | None = None,
+    hide_inactive: bool = False,
 ):
+    if hide_inactive:
+        # Voided POs, and POs of archived customers.
+        stmt = stmt.where(
+            PurchaseOrder.voided.is_(False),
+            ~PurchaseOrder.customer.has(Customer.archived.is_(True)),
+        )
     if order_type:
         stmt = stmt.where(func.lower(PurchaseOrder.order_type) == order_type.lower())
     stmt = _yes_no(
@@ -65,6 +72,7 @@ def count_purchase_orders(
     sent_to_shipstation: bool | None = None,
     shipped: bool | None = None,
     order_type: str | None = None,
+    hide_inactive: bool = False,
 ) -> int:
     stmt = _apply_po_filters(
         select(func.count()).select_from(PurchaseOrder),
@@ -74,6 +82,7 @@ def count_purchase_orders(
         sent_to_shipstation,
         shipped,
         order_type,
+        hide_inactive,
     )
     return session.scalar(stmt) or 0
 
@@ -88,10 +97,11 @@ def search_purchase_orders(
     sent_to_shipstation: bool | None = None,
     shipped: bool | None = None,
     order_type: str | None = None,
+    hide_inactive: bool = False,
 ) -> list[PurchaseOrder]:
     stmt = select(PurchaseOrder).options(joinedload(PurchaseOrder.customer))
     stmt = _apply_po_filters(
-        stmt, query, customer_id, invoiced, sent_to_shipstation, shipped, order_type
+        stmt, query, customer_id, invoiced, sent_to_shipstation, shipped, order_type, hide_inactive
     )
     stmt = stmt.order_by(PurchaseOrder.order_date.desc().nulls_last(), PurchaseOrder.po_number)
     if limit is not None:

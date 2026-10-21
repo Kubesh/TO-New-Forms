@@ -337,11 +337,20 @@ def _render_list() -> None:
         kind, message = flash
         (st.success if kind == "success" else st.warning if kind == "warning" else st.error)(message)
 
-    query = st.text_input(
-        "Search purchase orders",
-        placeholder="Search by PO number or customer name…",
-        label_visibility="collapsed",
-    )
+    col_search, col_hide = st.columns([4, 1.4], vertical_alignment="center")
+    with col_search:
+        query = st.text_input(
+            "Search purchase orders",
+            placeholder="Search by PO number or customer name…",
+            label_visibility="collapsed",
+        )
+    with col_hide:
+        hide_inactive = st.toggle(
+            "Hide archived and voided",
+            value=True,
+            key="po_hide_inactive",
+            help="Hides voided POs and POs for archived customers.",
+        )
     try:
         with session_scope() as session:
             order_type_names = list_order_type_names(session)
@@ -367,7 +376,7 @@ def _render_list() -> None:
     )
 
     order_type = None if type_choice == "All" else type_choice
-    filters_key = (query, invoiced, sent, shipped, order_type)
+    filters_key = (query, invoiced, sent, shipped, order_type, hide_inactive)
     if st.session_state.get("po_filters_key") != filters_key:
         st.session_state["po_filters_key"] = filters_key
         st.session_state["po_page"] = 1
@@ -382,6 +391,7 @@ def _render_list() -> None:
                 sent_to_shipstation=sent,
                 shipped=shipped,
                 order_type=order_type,
+                hide_inactive=hide_inactive,
             )
             total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
             page = min(max(page, 1), total_pages)
@@ -397,6 +407,7 @@ def _render_list() -> None:
                     sent_to_shipstation=sent,
                     shipped=shipped,
                     order_type=order_type,
+                    hide_inactive=hide_inactive,
                 )
                 po_ids = [po.po_id for po in purchase_orders]
                 stats = get_po_line_item_stats(session, po_ids)
