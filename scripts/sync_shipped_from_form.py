@@ -5,9 +5,10 @@ Usage:
 
 Reads the tab where the shipping Google Form lands its responses, and for
 every response newer than the last one processed, matches the PO number to
-po_headers.po_number. If the PO exists, isn't voided, and has no ship_date
-yet, ship_date is set to the form's submission timestamp. Responses whose PO
-can't be matched, is voided, or has already shipped are logged and skipped.
+po_headers.po_number, ignoring case, spaces and a leading "#". If the PO
+exists, isn't voided, and has no ship_date yet, ship_date is set to the form's
+submission timestamp. Responses whose PO can't be matched (or matches several),
+is voided, or has already shipped are logged and skipped.
 
 Every run (even one that finds nothing) is recorded in sheet_sync_runs with
 its log lines in sheet_sync_run_logs, and shown on the app's Google Sheets
@@ -143,13 +144,23 @@ def process_responses(conn, args, rows) -> tuple[int, int]:
     new_rows = [r for r in rows if r[0] > watermark]
     shipped = 0
     for submitted_at, po_number in new_rows:
-        po = conn.execute(
+        # Compare with any leading '#' and surrounding spaces ignored, on both sides.
+        matches = conn.execute(
             text(
-                "SELECT po_id, ship_date, voided FROM po_headers "
-                "WHERE upper(trim(po_number)) = upper(:po)"
+                "SELECT po_id, po_number, ship_date, voided FROM po_headers "
+                "WHERE upper(ltrim(trim(po_number), '#')) = upper(:po)"
             ),
-            {"po": po_number},
-        ).first()
+            {"po": po_number.lstrip("#").strip()},
+        ).all()
+        if len(matches) > 1:
+            logger.warning(
+                "%s: %r matches several POs (%s), skipped",
+                submitted_at,
+                po_number,
+                ", ".join(m.po_number for m in matches),
+            )
+            continue
+        po = matches[0] if matches else None
         if po is None:
             logger.warning("%s: no PO matches %r", submitted_at, po_number)
         elif po.voided:
