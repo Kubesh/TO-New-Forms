@@ -49,13 +49,6 @@ ORDER_TYPE_BADGE_CLASSES = {
 
 PO_CARD_CSS = """
 <style>
-@media (min-width: 768px) {
-    /* The PO list is wide (checkbox, six columns, icons), so give it more of the
-    page than the 65% the other pages use. */
-    [data-testid="stMainBlockContainer"] {
-        max-width: 85% !important;
-    }
-}
 .po-card-link,
 .po-card-link:visited,
 .po-card-link:hover,
@@ -99,9 +92,20 @@ PO_CARD_CSS = """
     with a wider column than its neighbors, throwing off alignment between
     rows and against the header. 145px comfortably fits the longest PO
     numbers we see without wrapping (paired with nowrap below). */
-    grid-template-columns: 90px minmax(110px, 1.2fr) minmax(110px, 2fr) 70px 75px minmax(170px, 1.3fr);
+    grid-template-columns: 82px minmax(0, 1fr) minmax(0, 1.8fr) 52px 58px 115px 1.4rem 1.4rem;
     gap: 0.5rem;
     align-items: center;
+}
+.po-table-header > div,
+.po-row-grid > div {
+    min-width: 0;
+}
+@media (min-width: 768px) {
+    .po-row-grid > div:not(.po-row-type-cell):not(.po-icon-cell) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 }
 .po-table-header {
     padding: 0 1.25rem;
@@ -115,6 +119,16 @@ PO_CARD_CSS = """
 .po-row-number {
     font-weight: 700;
     white-space: nowrap;
+}
+.po-icon-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+@media (max-width: 767px) {
+    .po-icon-cell:empty {
+        display: none;
+    }
 }
 .po-row-type-cell {
     display: flex;
@@ -634,7 +648,7 @@ def render_po_table(
     selectable puts a checkbox in front of each row (key po_sel_<po_id>).
     """
     sent_po_ids = sent_po_ids or set()
-    header_labels = ["PO Date", "PO Number", "Customer", "Total SKUs", "Total Units", "Order Type"]
+    header_labels = ["PO Date", "PO Number", "Customer", "Total SKUs", "Total Units", "Order Type", "", ""]
     header = (
         '<div class="po-table-header">'
         + "".join(f"<div>{label}</div>" for label in header_labels)
@@ -688,13 +702,15 @@ def _po_row_html(po, stats, href_base: str, sent: bool = False) -> str:
     type_cell = [_order_type_badge_html(po.order_type)]
     if po.voided:
         type_cell.append('<span class="po-badge po-badge-voided">Voided</span>')
+    invoice_icon = ""
     if (po.invoice_number or "").strip():
         invoice_title = html.escape(f"Invoice {po.invoice_number.strip()}")
-        type_cell.append(f'<span class="po-icon po-icon-invoice" title="{invoice_title}">$</span>')
-    if sent:
-        type_cell.append(
-            f'<span class="po-icon po-icon-label" title="Sent to ShipStation">{LABEL_ICON_SVG}</span>'
-        )
+        invoice_icon = f'<span class="po-icon po-icon-invoice" title="{invoice_title}">$</span>'
+    label_icon = (
+        f'<span class="po-icon po-icon-label" title="Sent to ShipStation">{LABEL_ICON_SVG}</span>'
+        if sent
+        else ""
+    )
 
     row = (
         '<div class="po-row-grid">'
@@ -704,6 +720,8 @@ def _po_row_html(po, stats, href_base: str, sent: bool = False) -> str:
         f'<div data-label="Total SKUs">{total_skus}</div>'
         f'<div data-label="Total Units">{_format_quantity(total_units)}</div>'
         f'<div class="po-row-type-cell" data-label="Order Type">{"".join(type_cell)}</div>'
+        f'<div class="po-icon-cell" data-label="Invoiced">{invoice_icon}</div>'
+        f'<div class="po-icon-cell" data-label="Sent to ShipStation">{label_icon}</div>'
         "</div>"
     )
 
