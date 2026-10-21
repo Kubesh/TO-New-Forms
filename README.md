@@ -62,3 +62,14 @@ migrations/                  # Alembic migrations
 - `customer_contacts` — `contact_id`, `customer_id` (FK → customers), `contact_name`, `contact_phone`, `contact_notes`, `created_at`, `updated_at`
 
 `updated_at` is maintained by a Postgres trigger (`set_updated_at()`), so it updates correctly regardless of which client writes the row.
+
+## Shipped-from-form sync
+
+`scripts/sync_shipped_from_form.py` reads the Google Form responses tab and sets
+`po_headers.ship_date` to the form timestamp for matching, unshipped, non-voided POs.
+Run `alembic upgrade head` (adds `form_sync_state`), set the `FORM_*` vars in `.env`,
+do a first run with `--since now` (or a date), then schedule it every 5 minutes:
+
+```
+*/5 * * * * cd /path/to/repo && .venv/bin/python scripts/sync_shipped_from_form.py
+```
