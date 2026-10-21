@@ -346,3 +346,38 @@ class BatchItem(Base, TimestampMixin):
 
     batch: Mapped["Batch"] = relationship(back_populates="items")
     product: Mapped["Item"] = relationship()
+
+
+class SheetSyncRun(Base):
+    """One execution of a Google Sheets sync script (see scripts/). A row is
+    written for every run, including ones that found nothing new, so
+    started_at doubles as the job's heartbeat. Only the script writes these;
+    the app just reads them."""
+
+    __tablename__ = "sheet_sync_runs"
+
+    run_id: Mapped[int] = mapped_column(primary_key=True)
+    job: Mapped[str] = mapped_column(String(100), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column()
+    # 'running', 'ok', or 'error'. A 'running' row that never finishes means
+    # the process died mid-run.
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="running")
+    responses_seen: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    pos_shipped: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+    logs: Mapped[list["SheetSyncRunLog"]] = relationship(
+        back_populates="run", order_by="SheetSyncRunLog.log_id"
+    )
+
+
+class SheetSyncRunLog(Base):
+    __tablename__ = "sheet_sync_run_logs"
+
+    log_id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("sheet_sync_runs.run_id"), nullable=False)
+    logged_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+    level: Mapped[str] = mapped_column(String(10), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+
+    run: Mapped["SheetSyncRun"] = relationship(back_populates="logs")

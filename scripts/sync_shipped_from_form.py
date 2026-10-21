@@ -9,8 +9,10 @@ po_headers.po_number. If the PO exists, isn't voided, and has no ship_date
 yet, ship_date is set to the form's submission timestamp. Responses whose PO
 can't be matched, is voided, or has already shipped are logged and skipped.
 
-The last processed timestamp is kept in form_sync_state, so run
-`alembic upgrade head` first. There is no backfill by default: the first run
+Every run (even one that finds nothing) is recorded in sheet_sync_runs with
+its log lines in sheet_sync_run_logs, and shown on the app's Google Sheets
+page; runs older than 30 days are pruned. The last processed timestamp is
+kept in form_sync_state, so run `alembic upgrade head` first. There is no backfill by default: the first run
 requires --since so the whole history isn't shipped by accident.
     --since now                 start from the latest response in the sheet
     --since 2026-10-01          process everything from that date on
@@ -46,6 +48,8 @@ logger = logging.getLogger("sync_shipped_from_form")
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 STATE_KEY = "shipped_form_last_timestamp"
+JOB = "shipped_from_form"  # matches SHIPPED_FORM_JOB in src/services/sheet_sync_runs.py
+LOG_RETENTION_DAYS = 30
 SHEETS_EPOCH = datetime(1899, 12, 30)
 
 
@@ -108,74 +112,149 @@ def parse_since(value: str, rows: list[tuple[datetime, str]]) -> datetime:
     return datetime.fromisoformat(value)
 
 
+class RunLogCollector(logging.Handler):
+    """Keeps this run's log lines so they can be saved with the run row."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[tuple[datetime, str, str]] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(
+            (datetime.fromtimestamp(record.created), record.levelname, record.getMessage())
+        )
+
+
+def process_responses(conn, args, rows) -> tuple[int, int]:
+    """Returns (new responses seen, POs shipped). Raises SystemExit(1) when
+    there is no saved position and no --since."""
+    stored = conn.execute(
+        text("SELECT value FROM form_sync_state WHERE key = :k FOR UPDATE"),
+        {"k": STATE_KEY},
+    ).scalar()
+    if args.since:
+        watermark = parse_since(args.since, rows)
+    elif stored:
+        watermark = datetime.fromisoformat(stored)
+    else:
+        logger.error("No saved position yet. Re-run with --since now (or a date).")
+        raise SystemExit(1)
+
+    new_rows = [r for r in rows if r[0] > watermark]
+    shipped = 0
+    for submitted_at, po_number in new_rows:
+        po = conn.execute(
+            text(
+                "SELECT po_id, ship_date, voided FROM po_headers "
+                "WHERE upper(trim(po_number)) = upper(:po)"
+            ),
+            {"po": po_number},
+        ).first()
+        if po is None:
+            logger.warning("%s: no PO matches %r", submitted_at, po_number)
+        elif po.voided:
+            logger.warning("%s: PO %s is voided, skipped", submitted_at, po_number)
+        elif po.ship_date is not None:
+            logger.info("%s: PO %s already shipped, skipped", submitted_at, po_number)
+        elif args.dry_run:
+            logger.info("%s: would ship PO %s", submitted_at, po_number)
+        else:
+            # ship_date IS NULL re-checked so a concurrent "Ship PO" click wins.
+            result = conn.execute(
+                text(
+                    "UPDATE po_headers SET ship_date = :ts "
+                    "WHERE po_id = :id AND ship_date IS NULL AND NOT voided"
+                ),
+                {"ts": submitted_at, "id": po.po_id},
+            )
+            shipped += result.rowcount
+            logger.info("%s: shipped PO %s", submitted_at, po_number)
+
+    if not args.dry_run:
+        new_watermark = new_rows[-1][0] if new_rows else watermark
+        conn.execute(
+            text(
+                "INSERT INTO form_sync_state (key, value) VALUES (:k, :v) "
+                "ON CONFLICT (key) DO UPDATE SET value = :v, updated_at = now()"
+            ),
+            {"k": STATE_KEY, "v": new_watermark.isoformat()},
+        )
+    return len(new_rows), shipped
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--since", help="'now' or an ISO date/datetime to start from")
     parser.add_argument("--dry-run", action="store_true", help="log only, change nothing")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    collector = RunLogCollector()
+    logger.addHandler(collector)
 
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
-        raise RuntimeError("DATABASE_URL is not set.")
+        logger.error("DATABASE_URL is not set.")
+        return 1
     engine = create_engine(normalize_database_url(database_url), pool_pre_ping=True)
 
-    rows = read_form_rows()
-
-    with engine.begin() as conn:
-        stored = conn.execute(
-            text("SELECT value FROM form_sync_state WHERE key = :k FOR UPDATE"),
-            {"k": STATE_KEY},
-        ).scalar()
-        if args.since:
-            watermark = parse_since(args.since, rows)
-        elif stored:
-            watermark = datetime.fromisoformat(stored)
-        else:
-            logger.error("No saved position yet. Re-run with --since now (or a date).")
-            return 1
-
-        new_rows = [r for r in rows if r[0] > watermark]
-        shipped = 0
-        for submitted_at, po_number in new_rows:
-            po = conn.execute(
+    run_id = None
+    if not args.dry_run:
+        # Own transaction so the run is visible in the app even if it crashes.
+        with engine.begin() as conn:
+            run_id = conn.execute(
                 text(
-                    "SELECT po_id, ship_date, voided FROM po_headers "
-                    "WHERE upper(trim(po_number)) = upper(:po)"
+                    "INSERT INTO sheet_sync_runs (job, started_at) "
+                    "VALUES (:job, :now) RETURNING run_id"
                 ),
-                {"po": po_number},
-            ).first()
-            if po is None:
-                logger.warning("%s: no PO matches %r", submitted_at, po_number)
-            elif po.voided:
-                logger.warning("%s: PO %s is voided, skipped", submitted_at, po_number)
-            elif po.ship_date is not None:
-                logger.info("%s: PO %s already shipped, skipped", submitted_at, po_number)
-            elif args.dry_run:
-                logger.info("%s: would ship PO %s", submitted_at, po_number)
-            else:
-                # ship_date IS NULL re-checked so a concurrent "Ship PO" click wins.
-                result = conn.execute(
-                    text(
-                        "UPDATE po_headers SET ship_date = :ts "
-                        "WHERE po_id = :id AND ship_date IS NULL AND NOT voided"
-                    ),
-                    {"ts": submitted_at, "id": po.po_id},
-                )
-                shipped += result.rowcount
-                logger.info("%s: shipped PO %s", submitted_at, po_number)
+                {"job": JOB, "now": datetime.now()},
+            ).scalar()
 
-        if not args.dry_run:
-            new_watermark = new_rows[-1][0] if new_rows else watermark
+    status, seen, shipped, exit_code = "ok", 0, 0, 0
+    try:
+        rows = read_form_rows()
+        with engine.begin() as conn:
+            seen, shipped = process_responses(conn, args, rows)
+        logger.info("%d new response(s), %d PO(s) shipped", seen, shipped)
+    except SystemExit as exc:
+        status, exit_code = "error", int(exc.code or 1)
+    except Exception:
+        logger.exception("Run failed")
+        status, exit_code = "error", 1
+
+    if run_id is not None:
+        with engine.begin() as conn:
             conn.execute(
                 text(
-                    "INSERT INTO form_sync_state (key, value) VALUES (:k, :v) "
-                    "ON CONFLICT (key) DO UPDATE SET value = :v, updated_at = now()"
+                    "UPDATE sheet_sync_runs SET finished_at = :now, status = :status, "
+                    "responses_seen = :seen, pos_shipped = :shipped WHERE run_id = :id"
                 ),
-                {"k": STATE_KEY, "v": new_watermark.isoformat()},
+                {
+                    "now": datetime.now(),
+                    "status": status,
+                    "seen": seen,
+                    "shipped": shipped,
+                    "id": run_id,
+                },
             )
-    logger.info("%d new response(s), %d PO(s) shipped", len(new_rows), shipped)
-    return 0
+            # Skip the "N new response(s)" summary on quiet runs; the run row
+            # already says so and this keeps the log table small.
+            lines = [r for r in collector.records if seen or r[1] != "INFO"]
+            if lines:
+                conn.execute(
+                    text(
+                        "INSERT INTO sheet_sync_run_logs (run_id, logged_at, level, message) "
+                        "VALUES (:run_id, :at, :level, :message)"
+                    ),
+                    [
+                        {"run_id": run_id, "at": at, "level": level, "message": message}
+                        for at, level, message in lines
+                    ],
+                )
+            conn.execute(
+                text("DELETE FROM sheet_sync_runs WHERE job = :job AND started_at < :cutoff"),
+                {"job": JOB, "cutoff": datetime.now() - timedelta(days=LOG_RETENTION_DAYS)},
+            )
+    return exit_code
 
 
 if __name__ == "__main__":

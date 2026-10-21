@@ -67,9 +67,12 @@ migrations/                  # Alembic migrations
 
 `scripts/sync_shipped_from_form.py` reads the Google Form responses tab and sets
 `po_headers.ship_date` to the form timestamp for matching, unshipped, non-voided POs.
-Run `alembic upgrade head` (adds `form_sync_state`), set the `FORM_*` vars in `.env`,
+Run `alembic upgrade head` (adds `form_sync_state` and the run-log tables), set the `FORM_*` vars in `.env`,
 do a first run with `--since now` (or a date), then schedule it every 5 minutes:
 
 ```
 */5 * * * * cd /path/to/repo && .venv/bin/python scripts/sync_shipped_from_form.py
 ```
+
+Each run is logged to the database (30 days kept) and shown under Integrations > Google Sheets in the app,
+including the last run time, a stale/failed warning, and per-run log lines.

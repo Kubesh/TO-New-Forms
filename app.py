@@ -6,6 +6,8 @@ from src.pages_app.assemblies import assemblies_page
 from src.pages_app.batches import batches_page
 from src.pages_app.categories import categories_page
 from src.pages_app.customers import customers_page
+from src.pages_app.google_sheets import google_sheets_page
+from src.pages_app.integrations import integrations_page
 from src.pages_app.inventory import inventory_page
 from src.pages_app.items import items_page
 from src.pages_app.production import production_page
@@ -212,6 +214,8 @@ items = st.Page(items_page, title="Items", url_path="items")
 production = st.Page(production_page, title="Production", url_path="production")
 assemblies = st.Page(assemblies_page, title="Assemblies", url_path="assemblies")
 batches = st.Page(batches_page, title="Batches", url_path="batches")
+integrations = st.Page(integrations_page, title="Integrations", url_path="integrations")
+google_sheets = st.Page(google_sheets_page, title="Google Sheets", url_path="google-sheets")
 
 # Build the nav ourselves (position="hidden") so the sidebar always renders,
 # rather than relying on Streamlit's auto nav widget, which hides itself
@@ -223,6 +227,7 @@ pg = st.navigation(
         "Inventory": [inventory, categories],
         "Items": [items],
         "Production": [production, assemblies, batches],
+        "Integrations": [integrations, google_sheets],
     },
     position="hidden",
 )
@@ -251,6 +256,9 @@ with st.sidebar:
     with st.container(key="tp-sidebar-subnav-production"):
         st.page_link(assemblies, label="Assemblies")
         st.page_link(batches, label="Batches")
+    st.page_link(integrations, label="Integrations")
+    with st.container(key="tp-sidebar-subnav-integrations"):
+        st.page_link(google_sheets, label="Google Sheets")
 
     # Streamlit's page navigation is a client-side transition, not a full
     # page reload, so the sidebar's open/closed state survives it - on
