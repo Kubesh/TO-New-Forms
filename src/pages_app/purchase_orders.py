@@ -11,6 +11,7 @@ from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
 from src.services import qbo_sync
 from src.services import quickbooks as qb
+from src.services.order_types import is_faire_order
 from src.services.order_shipstation import list_sends_for_po, refresh_labels, send_po
 from src.services.order_types import list_order_type_names, resolve_default_order_type
 from src.services.pricing import line_amount, order_total
@@ -47,6 +48,13 @@ ORDER_TYPE_BADGE_CLASSES = {
 
 PO_CARD_CSS = """
 <style>
+@media (min-width: 768px) {
+    /* The PO list is wide (checkbox, six columns, icons), so give it more of the
+    page than the 65% the other pages use. */
+    [data-testid="stMainBlockContainer"] {
+        max-width: 85% !important;
+    }
+}
 .po-card-link,
 .po-card-link:visited,
 .po-card-link:hover,
@@ -73,10 +81,7 @@ PO_CARD_CSS = """
     border-color: #F4591A;
 }
 .po-card-shipped {
-    border-color: #15803d;
-}
-.po-card-link:hover .po-card-shipped {
-    border-color: #166534;
+    background: rgba(34, 160, 80, 0.20);
 }
 .po-card-voided {
     border-color: #b91c1c;
@@ -93,7 +98,7 @@ PO_CARD_CSS = """
     with a wider column than its neighbors, throwing off alignment between
     rows and against the header. 145px comfortably fits the longest PO
     numbers we see without wrapping (paired with nowrap below). */
-    grid-template-columns: 90px 130px minmax(110px, 1fr) 65px 70px 200px;
+    grid-template-columns: 90px minmax(110px, 1.2fr) minmax(110px, 2fr) 70px 75px minmax(170px, 1.3fr);
     gap: 0.5rem;
     align-items: center;
 }
@@ -174,7 +179,7 @@ PO_CARD_CSS = """
     height: 1.2rem;
 }
 [class*="st-key-porow-"] {
-    margin-bottom: -0.55rem;
+    margin-bottom: -0.15rem;
 }
 .po-badge {
     display: inline-block;
@@ -322,7 +327,15 @@ def _render_list() -> None:
         placeholder="Search by PO number or customer name…",
         label_visibility="collapsed",
     )
-    col_invoiced, col_label, col_shipped = st.columns(3)
+    try:
+        with session_scope() as session:
+            order_type_names = list_order_type_names(session)
+    except RuntimeError as exc:
+        st.error(str(exc))
+        return
+    col_type, col_invoiced, col_label, col_shipped = st.columns(4)
+    with col_type:
+        type_choice = st.selectbox("Order type", ["All"] + order_type_names, key="po_filter_type")
     with col_invoiced:
         invoiced_choice = st.selectbox("Invoiced", YES_NO_OPTIONS, key="po_filter_invoiced")
     with col_label:
@@ -338,7 +351,8 @@ def _render_list() -> None:
         _yes_no_value(shipped_choice),
     )
 
-    filters_key = (query, invoiced, sent, shipped)
+    order_type = None if type_choice == "All" else type_choice
+    filters_key = (query, invoiced, sent, shipped, order_type)
     if st.session_state.get("po_filters_key") != filters_key:
         st.session_state["po_filters_key"] = filters_key
         st.session_state["po_page"] = 1
@@ -347,7 +361,12 @@ def _render_list() -> None:
     try:
         with session_scope() as session:
             total = count_purchase_orders(
-                session, query, invoiced=invoiced, sent_to_shipstation=sent, shipped=shipped
+                session,
+                query,
+                invoiced=invoiced,
+                sent_to_shipstation=sent,
+                shipped=shipped,
+                order_type=order_type,
             )
             total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
             page = min(max(page, 1), total_pages)
@@ -362,6 +381,7 @@ def _render_list() -> None:
                     invoiced=invoiced,
                     sent_to_shipstation=sent,
                     shipped=shipped,
+                    order_type=order_type,
                 )
                 po_ids = [po.po_id for po in purchase_orders]
                 stats = get_po_line_item_stats(session, po_ids)
@@ -385,6 +405,16 @@ def _render_list() -> None:
             st.session_state[f"po_sel_{po.po_id}"] = False
 
     selected_ids = [po.po_id for po in purchase_orders if st.session_state.get(f"po_sel_{po.po_id}")]
+    faire_selected = [
+        po.po_number
+        for po in purchase_orders
+        if po.po_id in selected_ids and is_faire_order(po.order_type)
+    ]
+    if faire_selected:
+        st.warning(
+            f"Faire orders aren't sent to ShipStation, so {', '.join(faire_selected)} will be "
+            "skipped."
+        )
     col_info, col_send = st.columns([3, 1])
     with col_info:
         st.caption(
@@ -415,7 +445,9 @@ def _start_bulk_send(po_ids: list[int]) -> None:
             po = get_purchase_order(session, po_id)
             if po is None:
                 continue
-            if po.voided or po.ship_date is not None:
+            if is_faire_order(po.order_type):
+                skipped.append(f"{po.po_number} (Faire order)")
+            elif po.voided or po.ship_date is not None:
                 skipped.append(f"{po.po_number} ({'voided' if po.voided else 'already shipped'})")
             elif po.customer is None:
                 skipped.append(f"{po.po_number} (no customer)")
@@ -855,11 +887,12 @@ def _create_qbo_invoice(po_id: int) -> None:
 
 
 def _render_shipstation_section(po, sends) -> None:
+    faire = is_faire_order(po.order_type)
     col_title, col_btn = st.columns([3, 1])
     with col_title:
         st.subheader("ShipStation")
     with col_btn:
-        blocked = po.voided or po.ship_date is not None
+        blocked = po.voided or po.ship_date is not None or faire
         label = "Send again" if sends else "Send to ShipStation"
         if st.button(label, width="stretch", disabled=blocked, key="send_shipstation_btn"):
             if sends:
@@ -871,6 +904,11 @@ def _render_shipstation_section(po, sends) -> None:
     if flash:
         kind, message = flash
         (st.success if kind == "success" else st.error)(message)
+
+    if faire:
+        st.warning("Faire orders aren't sent to ShipStation.")
+        if not sends:
+            return
 
     if not sends:
         st.write("Not sent to ShipStation yet.")

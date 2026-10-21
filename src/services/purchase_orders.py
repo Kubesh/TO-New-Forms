@@ -28,7 +28,10 @@ def _apply_po_filters(
     invoiced: bool | None = None,
     sent_to_shipstation: bool | None = None,
     shipped: bool | None = None,
+    order_type: str | None = None,
 ):
+    if order_type:
+        stmt = stmt.where(func.lower(PurchaseOrder.order_type) == order_type.lower())
     stmt = _yes_no(
         stmt,
         func.coalesce(func.trim(PurchaseOrder.invoice_number), "") != "",
@@ -61,6 +64,7 @@ def count_purchase_orders(
     invoiced: bool | None = None,
     sent_to_shipstation: bool | None = None,
     shipped: bool | None = None,
+    order_type: str | None = None,
 ) -> int:
     stmt = _apply_po_filters(
         select(func.count()).select_from(PurchaseOrder),
@@ -69,6 +73,7 @@ def count_purchase_orders(
         invoiced,
         sent_to_shipstation,
         shipped,
+        order_type,
     )
     return session.scalar(stmt) or 0
 
@@ -82,9 +87,12 @@ def search_purchase_orders(
     invoiced: bool | None = None,
     sent_to_shipstation: bool | None = None,
     shipped: bool | None = None,
+    order_type: str | None = None,
 ) -> list[PurchaseOrder]:
     stmt = select(PurchaseOrder).options(joinedload(PurchaseOrder.customer))
-    stmt = _apply_po_filters(stmt, query, customer_id, invoiced, sent_to_shipstation, shipped)
+    stmt = _apply_po_filters(
+        stmt, query, customer_id, invoiced, sent_to_shipstation, shipped, order_type
+    )
     stmt = stmt.order_by(PurchaseOrder.order_date.desc().nulls_last(), PurchaseOrder.po_number)
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)

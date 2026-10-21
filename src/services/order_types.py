@@ -29,3 +29,9 @@ def resolve_default_order_type(customer: Customer | None) -> str:
     if customer.customer_type and customer.customer_type.name in CUSTOMER_TYPE_DEFAULTS:
         return CUSTOMER_TYPE_DEFAULTS[customer.customer_type.name]
     return FALLBACK_ORDER_TYPE
+
+
+def is_faire_order(order_type: str | None) -> bool:
+    """Faire orders are handled entirely in Faire: they are never sent to
+    ShipStation or invoiced in QuickBooks. Matches "Faire", "Faire Order"..."""
+    return "faire" in (order_type or "").strip().lower()

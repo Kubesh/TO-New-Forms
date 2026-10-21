@@ -37,10 +37,10 @@ from src.models import (
     QboItemLink,
 )
 from src.services import quickbooks as qb
+from src.services.order_types import is_faire_order
 from src.services.pricing import line_amount, resolve_prices
 from src.services.purchase_orders import get_purchase_order, price_unpriced_lines
 
-FAIRE_ORDER_TYPE = "faire"  # matches the order types "Faire", "Faire Order", ...
 SEARCH_LIMIT = 25
 
 
@@ -345,7 +345,7 @@ def _live_lines(po: PurchaseOrder):
 
 def check_invoice(session: Session, po: PurchaseOrder) -> InvoiceCheck:
     check = InvoiceCheck()
-    if FAIRE_ORDER_TYPE in (po.order_type or "").strip().lower():
+    if is_faire_order(po.order_type):
         check.excluded = "Faire orders aren't invoiced in QuickBooks."
         return check
     check.invoice = get_live_invoice(session, po.po_id)
