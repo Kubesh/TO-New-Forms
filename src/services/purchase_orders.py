@@ -103,7 +103,11 @@ def search_purchase_orders(
     stmt = _apply_po_filters(
         stmt, query, customer_id, invoiced, sent_to_shipstation, shipped, order_type, hide_inactive
     )
-    stmt = stmt.order_by(PurchaseOrder.order_date.desc().nulls_last(), PurchaseOrder.po_number)
+    stmt = stmt.order_by(
+        PurchaseOrder.order_date.desc().nulls_last(),
+        PurchaseOrder.created_at.desc(),
+        PurchaseOrder.po_number,
+    )
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)
     return list(session.scalars(stmt).unique().all())
@@ -116,7 +120,11 @@ def list_purchase_orders_for_customer(
         select(PurchaseOrder)
         .options(joinedload(PurchaseOrder.customer))
         .where(PurchaseOrder.customer_id == customer_id)
-        .order_by(PurchaseOrder.order_date.desc().nulls_last(), PurchaseOrder.po_number)
+        .order_by(
+            PurchaseOrder.order_date.desc().nulls_last(),
+            PurchaseOrder.created_at.desc(),
+            PurchaseOrder.po_number,
+        )
     )
     return list(session.scalars(stmt).unique().all())
 
