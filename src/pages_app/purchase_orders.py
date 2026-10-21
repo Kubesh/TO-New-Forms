@@ -11,7 +11,7 @@ from src.services.customers import get_customer, resolve_due_date_days
 from src.services.items import list_sellable_item_choices, list_shipping_material_choices
 from src.services import qbo_sync
 from src.services import quickbooks as qb
-from src.services.order_types import is_faire_order
+from src.services.order_types import shipstation_block_reason
 from src.services.order_shipstation import list_sends_for_po, refresh_labels, send_po
 from src.services.order_types import list_order_type_names, resolve_default_order_type
 from src.services.pricing import line_amount, order_total
@@ -405,15 +405,16 @@ def _render_list() -> None:
             st.session_state[f"po_sel_{po.po_id}"] = False
 
     selected_ids = [po.po_id for po in purchase_orders if st.session_state.get(f"po_sel_{po.po_id}")]
-    faire_selected = [
-        po.po_number
+    blocked_selected = {
+        po.po_number: shipstation_block_reason(po.order_type)
         for po in purchase_orders
-        if po.po_id in selected_ids and is_faire_order(po.order_type)
-    ]
-    if faire_selected:
+        if po.po_id in selected_ids and shipstation_block_reason(po.order_type)
+    }
+    if blocked_selected:
+        types = sorted({r.split(" orders")[0] for r in blocked_selected.values()})
         st.warning(
-            f"Faire orders aren't sent to ShipStation, so {', '.join(faire_selected)} will be "
-            "skipped."
+            f"{' and '.join(types)} orders aren't sent to ShipStation, so "
+            f"{', '.join(blocked_selected)} will be skipped."
         )
     col_info, col_send = st.columns([3, 1])
     with col_info:
@@ -445,8 +446,8 @@ def _start_bulk_send(po_ids: list[int]) -> None:
             po = get_purchase_order(session, po_id)
             if po is None:
                 continue
-            if is_faire_order(po.order_type):
-                skipped.append(f"{po.po_number} (Faire order)")
+            if type_block := shipstation_block_reason(po.order_type):
+                skipped.append(f"{po.po_number} ({type_block.split(' orders')[0]} order)")
             elif po.voided or po.ship_date is not None:
                 skipped.append(f"{po.po_number} ({'voided' if po.voided else 'already shipped'})")
             elif po.customer is None:
@@ -887,12 +888,12 @@ def _create_qbo_invoice(po_id: int) -> None:
 
 
 def _render_shipstation_section(po, sends) -> None:
-    faire = is_faire_order(po.order_type)
+    type_block = shipstation_block_reason(po.order_type)
     col_title, col_btn = st.columns([3, 1])
     with col_title:
         st.subheader("ShipStation")
     with col_btn:
-        blocked = po.voided or po.ship_date is not None or faire
+        blocked = po.voided or po.ship_date is not None or type_block is not None
         label = "Send again" if sends else "Send to ShipStation"
         if st.button(label, width="stretch", disabled=blocked, key="send_shipstation_btn"):
             if sends:
@@ -905,8 +906,8 @@ def _render_shipstation_section(po, sends) -> None:
         kind, message = flash
         (st.success if kind == "success" else st.error)(message)
 
-    if faire:
-        st.warning("Faire orders aren't sent to ShipStation.")
+    if type_block:
+        st.warning(type_block)
         if not sends:
             return
 

@@ -35,3 +35,14 @@ def is_faire_order(order_type: str | None) -> bool:
     """Faire orders are handled entirely in Faire: they are never sent to
     ShipStation or invoiced in QuickBooks. Matches "Faire", "Faire Order"..."""
     return "faire" in (order_type or "").strip().lower()
+
+
+def shipstation_block_reason(order_type: str | None) -> str | None:
+    """Why a PO of this order type is never sent to ShipStation, or None if it
+    can be: Faire orders are handled in Faire, and Distributor orders ship LTL."""
+    lowered = (order_type or "").strip().lower()
+    if "faire" in lowered:
+        return "Faire orders aren't sent to ShipStation."
+    if "distributor" in lowered:
+        return "Distributor orders ship LTL, so they aren't sent to ShipStation."
+    return None

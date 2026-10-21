@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.models import OrderShipstation, PurchaseOrder
-from src.services.order_types import is_faire_order
+from src.services.order_types import shipstation_block_reason
 from src.services.purchase_orders import get_purchase_order
 from src.services.shipstation import (
     ShipStationError,
@@ -101,8 +101,8 @@ def send_po(session: Session, po_id: int) -> dict:
     po = get_purchase_order(session, po_id)
     if po is None or po.voided or po.ship_date is not None:
         raise ShipStationError("This PO can't be sent - it's voided or already shipped.")
-    if is_faire_order(po.order_type):
-        raise ShipStationError("Faire orders aren't sent to ShipStation.")
+    if reason := shipstation_block_reason(po.order_type):
+        raise ShipStationError(reason)
     existing_keys = {send.order_key for send in list_sends_for_po(session, po_id)}
     sequence = next_sequence(po, existing_keys)
     shipping = configured_shipping_method(session)
