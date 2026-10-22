@@ -484,27 +484,35 @@ def invoice_custom_fields(session: Session) -> dict[str, str]:
     return find_po_field(session)[1]
 
 
-def customer_terms(session: Session, qbo_customer_id: str) -> dict | None:
-    """The payment terms set on a QuickBooks customer, as an invoice
-    SalesTermRef, or None if the customer has none."""
+def customer_billing_details(session: Session, qbo_customer_id: str) -> dict:
+    """What an invoice should copy from a QuickBooks customer, because the API
+    (unlike the QuickBooks screen) doesn't fill it in: its payment terms as a
+    SalesTermRef and its email. Each is None if the customer has none."""
     rows = qb.query(
         session,
         f"select * from Customer where Id = '{qb.escape_literal(qbo_customer_id)}'",
         page_size=2,
     )
-    ref = rows[0].get("SalesTermRef") if rows else None
-    return {"value": ref["value"]} if ref and ref.get("value") else None
+    row = rows[0] if rows else {}
+    ref = row.get("SalesTermRef")
+    email = ((row.get("PrimaryEmailAddr") or {}).get("Address") or "").strip()
+    return {
+        "terms": {"value": ref["value"]} if ref and ref.get("value") else None,
+        "email": email or None,
+    }
 
 
-def _invoice_terms(session: Session, customer: Customer, qbo_customer_id: str) -> dict | None:
-    """Terms for an invoice to the linked QuickBooks customer; a store linked
-    to its own sub-customer with no terms of its own uses its parent's."""
-    terms = customer_terms(session, qbo_customer_id)
-    if terms is None and customer.parent is not None:
+def _invoice_billing(session: Session, customer: Customer, qbo_customer_id: str) -> dict:
+    """Terms and email for an invoice to the linked QuickBooks customer; a
+    store linked to its own sub-customer uses its parent's for whichever of
+    the two the sub-customer doesn't have."""
+    details = customer_billing_details(session, qbo_customer_id)
+    if customer.parent is not None and not all(details.values()):
         parent_link = get_customer_link(session, customer.parent.customer_id)
         if parent_link is not None and parent_link.qbo_customer_id != qbo_customer_id:
-            terms = customer_terms(session, parent_link.qbo_customer_id)
-    return terms
+            parent = customer_billing_details(session, parent_link.qbo_customer_id)
+            details = {key: details[key] or parent[key] for key in details}
+    return details
 
 
 def build_invoice_payload(
@@ -512,7 +520,7 @@ def build_invoice_payload(
     qbo_customer_id: str,
     item_links: dict[int, QboItemLink],
     po_field: tuple[str, str, bool] | None = None,
-    sales_term_ref: dict | None = None,
+    billing: dict | None = None,
 ) -> dict:
     lines = []
     for line in _live_lines(po):
@@ -545,9 +553,13 @@ def build_invoice_payload(
         ]
     # The PO's due date is the internal shipping due date, so it is never sent.
     # The customer's own payment terms are, and QuickBooks works out the
-    # invoice's due date from them.
-    if sales_term_ref:
-        payload["SalesTermRef"] = sales_term_ref
+    # invoice's due date from them. The email is sent as the invoice's bill-to
+    # email (the API doesn't copy it from the customer).
+    billing = billing or {}
+    if billing.get("terms"):
+        payload["SalesTermRef"] = billing["terms"]
+    if billing.get("email"):
+        payload["BillEmail"] = {"Address": billing["email"]}
     ship_to = po.customer
     address = _address("shipping", ship_to)
     if address:
@@ -606,7 +618,7 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
         qbo_customer_id,
         current_item_links(session),
         po_field,
-        _invoice_terms(session, po.customer, qbo_customer_id),
+        _invoice_billing(session, po.customer, qbo_customer_id),
     )
     total = invoice_total(po)
 
