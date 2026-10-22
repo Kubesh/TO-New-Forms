@@ -29,8 +29,8 @@ def google_sheets_page() -> None:
     st.title("Google Sheets")
     st.subheader("Shipped from form")
     st.caption(
-        "Marks purchase orders shipped from new Google Form responses. "
-        "Runs on a schedule outside the app (scripts/sync_shipped_from_form.py)."
+        "Orders marked shipped using the legacy Google Forms responses. "
+        "This script runs on a 5 min schedule outside of the app."
     )
 
     with session_scope() as session:
