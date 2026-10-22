@@ -496,6 +496,17 @@ def customer_terms(session: Session, qbo_customer_id: str) -> dict | None:
     return {"value": ref["value"]} if ref and ref.get("value") else None
 
 
+def _invoice_terms(session: Session, customer: Customer, qbo_customer_id: str) -> dict | None:
+    """Terms for an invoice to the linked QuickBooks customer; a store linked
+    to its own sub-customer with no terms of its own uses its parent's."""
+    terms = customer_terms(session, qbo_customer_id)
+    if terms is None and customer.parent is not None:
+        parent_link = get_customer_link(session, customer.parent.customer_id)
+        if parent_link is not None and parent_link.qbo_customer_id != qbo_customer_id:
+            terms = customer_terms(session, parent_link.qbo_customer_id)
+    return terms
+
+
 def build_invoice_payload(
     po: PurchaseOrder,
     qbo_customer_id: str,
@@ -595,7 +606,7 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
         qbo_customer_id,
         current_item_links(session),
         po_field,
-        customer_terms(session, qbo_customer_id),
+        _invoice_terms(session, po.customer, qbo_customer_id),
     )
     total = invoice_total(po)
 
