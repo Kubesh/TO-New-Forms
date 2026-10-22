@@ -64,10 +64,17 @@ def _normalize(name: str | None) -> str:
 # --- customers --------------------------------------------------------------
 
 
-def billing_customer(customer: Customer) -> Customer:
-    """Who an invoice for this customer is billed to: their parent account if
-    they have one, else themselves."""
-    return customer.parent if customer.parent is not None else customer
+def invoice_target(
+    session: Session, customer: Customer
+) -> tuple[Customer, QboCustomerLink | None]:
+    """The customer whose QuickBooks link an invoice for this customer uses,
+    and that link (None if unlinked): the customer's own link if it has one,
+    else its parent account's. A store only needs its own link when it has its
+    own QuickBooks customer (a sub-customer)."""
+    own = get_customer_link(session, customer.customer_id)
+    if own is not None or customer.parent is None:
+        return customer, own
+    return customer.parent, get_customer_link(session, customer.parent.customer_id)
 
 
 def get_customer_link(session: Session, customer_id: int) -> QboCustomerLink | None:
@@ -175,7 +182,8 @@ def create_qbo_customer(session: Session, customer: Customer) -> dict:
 
 
 def billing_customers(session: Session, include_archived: bool = False) -> list[Customer]:
-    """Customers that get QuickBooks links of their own: those without a parent."""
+    """Top-level accounts: the ones auto-matched by name and counted on the QuickBooks
+    page. Stores of a parent account can be linked individually from their own page."""
     stmt = select(Customer).where(Customer.parent_id.is_(None)).order_by(Customer.customer_name)
     if not include_archived:
         stmt = stmt.where(Customer.archived.is_(False))
@@ -360,9 +368,9 @@ def check_invoice(session: Session, po: PurchaseOrder) -> InvoiceCheck:
     if po.customer is None:
         check.blockers.append("The PO has no customer.")
     else:
-        bill = billing_customer(po.customer)
-        if realm and get_customer_link(session, bill.customer_id) is None:
-            check.blockers.append(f"{bill.customer_name} isn't linked to a QuickBooks customer.")
+        target, target_link = invoice_target(session, po.customer)
+        if realm and target_link is None:
+            check.blockers.append(f"{target.customer_name} isn't linked to a QuickBooks customer.")
     lines = _live_lines(po)
     if not lines:
         check.blockers.append("The PO has no lines with a quantity.")
@@ -564,8 +572,8 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
     po_field, _ = find_po_field(session)
 
     realm = current_realm(session)
-    bill = billing_customer(po.customer)
-    qbo_customer_id = get_customer_link(session, bill.customer_id).qbo_customer_id
+    _, target_link = invoice_target(session, po.customer)
+    qbo_customer_id = target_link.qbo_customer_id
     payload = build_invoice_payload(po, qbo_customer_id, current_item_links(session), po_field)
     total = invoice_total(po)
 

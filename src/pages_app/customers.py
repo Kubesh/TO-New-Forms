@@ -442,14 +442,15 @@ def _render_detail(customer_id: int) -> None:
 
 
 def _render_quickbooks_link(customer) -> None:
-    """Which QuickBooks customer this customer is invoiced under. Stores of a
-    parent account are billed through the parent, so the link lives there."""
+    """Which QuickBooks customer this customer is invoiced under: its own link
+    if it has one, else its parent account's."""
     st.subheader("QuickBooks")
     try:
         with session_scope() as session:
-            bill = qbo_sync.billing_customer(get_customer(session, customer.customer_id))
-            bill_id, bill_name = bill.customer_id, bill.customer_name
-            link = qbo_sync.get_customer_link(session, bill_id)
+            target, link = qbo_sync.invoice_target(
+                session, get_customer(session, customer.customer_id)
+            )
+            target_name, is_own = target.customer_name, target.customer_id == customer.customer_id
             connected = qb.get_connection(session) is not None
     except (qb.QuickBooksNotConfigured, qb.QuickBooksNotConnected, qb.QuickBooksError) as exc:
         st.caption(f"QuickBooks isn't available: {exc}")
@@ -457,18 +458,29 @@ def _render_quickbooks_link(customer) -> None:
     if not connected:
         st.caption("QuickBooks isn't connected yet.")
         return
-    is_child = bill_id != customer.customer_id
-    if is_child:
-        st.write(f"Invoiced through the parent account **{bill_name}**.")
-    if link:
-        st.write(f"QuickBooks customer: **{link.qbo_display_name or link.qbo_customer_id}**")
+    qbo_name = (link.qbo_display_name or link.qbo_customer_id) if link else None
+    if is_own and qbo_name:
+        st.write(f"QuickBooks customer: **{qbo_name}**")
+    elif not is_own and qbo_name:
+        st.write(
+            f"Invoiced through the parent account **{target_name}** "
+            f"(QuickBooks customer: **{qbo_name}**)."
+        )
+    elif not is_own:
+        st.write(
+            f"Invoiced through the parent account **{target_name}**, which isn't linked to a "
+            "QuickBooks customer - invoices can't be created yet."
+        )
     else:
         st.write("Not linked to a QuickBooks customer - invoices can't be created yet.")
-    if st.button(
-        "Change link" if link else "Link to QuickBooks",
-        key=f"qbo_link_btn_{bill_id}",
-    ):
-        link_customer_dialog(bill_id)
+    if is_own and link:
+        label = "Change link"
+    elif not is_own and link:
+        label = "Link to its own QuickBooks customer"
+    else:
+        label = "Link to QuickBooks"
+    if st.button(label, key=f"qbo_link_btn_{customer.customer_id}"):
+        link_customer_dialog(customer.customer_id)
 
 
 def _render_address(customer, prefix: str) -> None:

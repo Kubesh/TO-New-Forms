@@ -76,7 +76,7 @@ def _render_status() -> None:
         st.info("This is the QuickBooks sandbox (test data) - nothing here touches the real books.")
     st.write(
         f"**Customers linked:** {sum(1 for c in customers if c.customer_id in linked)} of "
-        f"{len(customers)} (stores of a parent account use the parent's link)"
+        f"{len(customers)} (stores of a parent account use the parent's link unless linked on their own)"
     )
     st.write(
         f"**Sellable SKUs linked:** {sum(1 for i in items if i.item_id in item_links)} of {len(items)}"
