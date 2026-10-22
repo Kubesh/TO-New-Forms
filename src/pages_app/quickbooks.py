@@ -247,6 +247,8 @@ def _render_customers() -> None:
             st.caption("No more exact name matches.")
         st.caption(f"{left} customer{'' if left == 1 else 's'} would still need linking by hand.")
 
+    _render_customer_sync()
+
     with session_scope() as session:
         customers = qbo_sync.billing_customers(session)
         links = qbo_sync.customer_links_by_id(session)
@@ -282,6 +284,64 @@ def _render_customers() -> None:
                 link_customer_dialog(customer.customer_id)
     if len(shown) > 200:
         st.caption("Showing the first 200 - use the filter to narrow the list.")
+
+
+SYNC_FIELD_LABELS = {
+    "bill_to_email": "Bill-to email",
+    "phone_number": "Phone",
+    "billing": "Billing address",
+    "shipping": "Shipping address",
+}
+
+
+def _sync_field_group(field_name: str) -> str:
+    return field_name.split("_", 1)[0] if field_name.startswith(("billing_", "shipping_")) else field_name
+
+
+def _render_customer_sync() -> None:
+    st.divider()
+    st.markdown("**Sync customer details**")
+    st.caption(
+        "Fills in blanks on linked customers from QuickBooks: bill-to email, phone, and "
+        "billing/shipping address. Anything already filled in here is left alone, and an "
+        "address is only copied when that whole address is empty."
+    )
+    if st.button("Check for details to fill in", key="qbo_sync_customers_check"):
+        try:
+            with session_scope() as session:
+                st.session_state["qbo_customer_sync"] = qbo_sync.plan_customer_sync(session)
+        except QBO_ERRORS as exc:
+            _show_error(exc)
+    plan = st.session_state.get("qbo_customer_sync")
+    if plan is None:
+        return
+    if not plan:
+        st.caption("Nothing to fill in - every linked customer already has what QuickBooks has.")
+        return
+
+    counts: dict[str, int] = {}
+    for entry in plan:
+        for group in {_sync_field_group(f) for f in entry["fields"]}:
+            counts[group] = counts.get(group, 0) + 1
+    st.write(
+        f"**{len(plan)}** customer{'' if len(plan) == 1 else 's'} would be updated: "
+        + ", ".join(f"{SYNC_FIELD_LABELS[group]} ({n})" for group, n in counts.items())
+    )
+    with st.expander("See the changes"):
+        for entry in plan[:200]:
+            groups = []
+            for group in dict.fromkeys(_sync_field_group(f) for f in entry["fields"]):
+                values = [v for f, v in entry["fields"].items() if _sync_field_group(f) == group]
+                groups.append(f"{SYNC_FIELD_LABELS[group]}: {', '.join(values)}")
+            st.caption(f"**{entry['name']}** ← {entry['qbo_name']}  —  " + "  |  ".join(groups))
+        if len(plan) > 200:
+            st.caption(f"…and {len(plan) - 200} more.")
+    if st.button(f"Fill in {len(plan)} customer{'' if len(plan) == 1 else 's'}", type="primary", key="qbo_sync_customers_apply"):
+        with session_scope() as session:
+            changed = qbo_sync.apply_customer_sync(session, plan)
+        st.session_state.pop("qbo_customer_sync", None)
+        st.toast(f"Updated {changed} customer{'' if changed == 1 else 's'} from QuickBooks.")
+        st.rerun()
 
 
 # --- items ------------------------------------------------------------------

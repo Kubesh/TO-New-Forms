@@ -37,6 +37,7 @@ from src.models import (
     QboItemLink,
 )
 from src.services import quickbooks as qb
+from src.services.customers import format_phone_number, format_postal_code, normalize_emails
 from src.services.order_types import is_faire_order
 from src.services.pricing import line_amount, resolve_prices
 from src.services.purchase_orders import get_purchase_order, price_unpriced_lines
@@ -193,6 +194,100 @@ def billing_customers(session: Session, include_archived: bool = False) -> list[
     if not include_archived:
         stmt = stmt.where(Customer.archived.is_(False))
     return list(session.scalars(stmt))
+
+
+# QuickBooks address part -> the app's customer field suffix.
+_ADDRESS_PARTS = (
+    ("Line1", "address_line1"),
+    ("Line2", "address_line2"),
+    ("City", "city"),
+    ("CountrySubDivisionCode", "state"),
+    ("PostalCode", "postal_code"),
+    ("Country", "country"),
+)
+_ADDRESS_SOURCES = (("billing", "BillAddr"), ("shipping", "ShipAddr"))
+
+
+def _fit(field: str, value: str | None) -> str | None:
+    """The value trimmed to the customer column's length, or None if blank."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    return value[: Customer.__table__.columns[field].type.length]
+
+
+def plan_customer_sync(session: Session) -> list[dict]:
+    """What syncing from QuickBooks would fill in: for each linked, active
+    customer, the fields that are blank in the app and have a value in
+    QuickBooks. Nothing the app already has is ever replaced, and an address
+    is only copied when the app's whole address (billing or shipping) is
+    empty, so a half-filled address never ends up mixed with QuickBooks'.
+    Each entry: {customer_id, name, qbo_name, fields: {field: value}}."""
+    links = customer_links_by_id(session)
+    if not links:
+        return []
+    qbo_by_id = {str(c["Id"]): c for c in qb.list_customers(session)}
+    customers = session.scalars(
+        select(Customer)
+        .where(Customer.customer_id.in_(list(links)), Customer.archived.is_(False))
+        .order_by(Customer.customer_name)
+    )
+    plan = []
+    for customer in customers:
+        link = links[customer.customer_id]
+        qbo = qbo_by_id.get(link.qbo_customer_id)
+        if qbo is None:
+            continue
+        fields: dict[str, str] = {}
+        if not (customer.bill_to_email or "").strip():
+            email, error = normalize_emails((qbo.get("PrimaryEmailAddr") or {}).get("Address"))
+            if email and not error:
+                fields["bill_to_email"] = _fit("bill_to_email", email)
+        if not (customer.phone_number or "").strip():
+            phone, error = format_phone_number((qbo.get("PrimaryPhone") or {}).get("FreeFormNumber") or "")
+            if phone and not error:
+                fields["phone_number"] = _fit("phone_number", phone)
+        for prefix, key in _ADDRESS_SOURCES:
+            current = [getattr(customer, f"{prefix}_{part}") for _, part in _ADDRESS_PARTS]
+            if any((value or "").strip() for value in current):
+                continue
+            address = qbo.get(key) or {}
+            for qbo_part, part in _ADDRESS_PARTS:
+                value = address.get(qbo_part)
+                if part == "postal_code" and value:
+                    value = format_postal_code(value)
+                value = _fit(f"{prefix}_{part}", value)
+                if value:
+                    fields[f"{prefix}_{part}"] = value
+        fields = {k: v for k, v in fields.items() if v}
+        if fields:
+            plan.append(
+                {
+                    "customer_id": customer.customer_id,
+                    "name": customer.customer_name,
+                    "qbo_name": link.qbo_display_name or link.qbo_customer_id,
+                    "fields": fields,
+                }
+            )
+    return plan
+
+
+def apply_customer_sync(session: Session, plan: list[dict]) -> int:
+    """Writes a plan from plan_customer_sync, skipping any field that has been
+    filled in since the plan was made. Returns the number of customers changed."""
+    changed = 0
+    for entry in plan:
+        customer = session.get(Customer, entry["customer_id"])
+        if customer is None:
+            continue
+        touched = False
+        for field_name, value in entry["fields"].items():
+            if not (getattr(customer, field_name) or "").strip():
+                setattr(customer, field_name, value)
+                touched = True
+        changed += touched
+    session.commit()
+    return changed
 
 
 def plan_customer_matches(session: Session) -> tuple[list[tuple[Customer, dict]], int]:
