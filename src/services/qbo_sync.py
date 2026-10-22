@@ -484,11 +484,24 @@ def invoice_custom_fields(session: Session) -> dict[str, str]:
     return find_po_field(session)[1]
 
 
+def customer_terms(session: Session, qbo_customer_id: str) -> dict | None:
+    """The payment terms set on a QuickBooks customer, as an invoice
+    SalesTermRef, or None if the customer has none."""
+    rows = qb.query(
+        session,
+        f"select * from Customer where Id = '{qb.escape_literal(qbo_customer_id)}'",
+        page_size=2,
+    )
+    ref = rows[0].get("SalesTermRef") if rows else None
+    return {"value": ref["value"]} if ref and ref.get("value") else None
+
+
 def build_invoice_payload(
     po: PurchaseOrder,
     qbo_customer_id: str,
     item_links: dict[int, QboItemLink],
     po_field: tuple[str, str, bool] | None = None,
+    sales_term_ref: dict | None = None,
 ) -> dict:
     lines = []
     for line in _live_lines(po):
@@ -519,8 +532,11 @@ def build_invoice_payload(
                 "StringValue": po.po_number,
             }
         ]
-    if po.due_date:
-        payload["DueDate"] = po.due_date.isoformat()
+    # The PO's due date is the internal shipping due date, so it is never sent.
+    # The customer's own payment terms are, and QuickBooks works out the
+    # invoice's due date from them.
+    if sales_term_ref:
+        payload["SalesTermRef"] = sales_term_ref
     ship_to = po.customer
     address = _address("shipping", ship_to)
     if address:
@@ -574,7 +590,13 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
     realm = current_realm(session)
     _, target_link = invoice_target(session, po.customer)
     qbo_customer_id = target_link.qbo_customer_id
-    payload = build_invoice_payload(po, qbo_customer_id, current_item_links(session), po_field)
+    payload = build_invoice_payload(
+        po,
+        qbo_customer_id,
+        current_item_links(session),
+        po_field,
+        customer_terms(session, qbo_customer_id),
+    )
     total = invoice_total(po)
 
     # An earlier attempt whose outcome is unknown is retried under the same
