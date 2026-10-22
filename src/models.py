@@ -53,6 +53,10 @@ class Customer(Base, TimestampMixin):
     store_key: Mapped[int | None] = mapped_column()
     notes: Mapped[str | None] = mapped_column(String(100))
     phone_number: Mapped[str | None] = mapped_column(String(25))
+    # Invoices to QuickBooks go to bill_to_email (else the parent account's);
+    # one or several addresses, comma separated.
+    bill_to_email: Mapped[str | None] = mapped_column(String(255))
+    ship_to_email: Mapped[str | None] = mapped_column(String(255))
     archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     billing_address_line1: Mapped[str | None] = mapped_column(String(255))

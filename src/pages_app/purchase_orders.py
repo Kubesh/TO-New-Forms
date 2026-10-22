@@ -912,6 +912,7 @@ def _render_quickbooks_section(po_id: int) -> None:
         with session_scope() as session:
             po = get_purchase_order(session, po_id)
             check = qbo_sync.check_invoice(session, po)
+            customer_id = po.customer_id
             attempts = qbo_sync.list_invoice_attempts(session, po_id)
             stale_total = None
             if check.invoice is not None and qbo_sync.invoice_is_stale(po, check.invoice):
@@ -956,14 +957,40 @@ def _render_quickbooks_section(po_id: int) -> None:
         disabled=not check.can_create,
         key="create_qbo_invoice_btn",
     ):
-        _create_qbo_invoice(po_id)
+        if check.warnings:
+            missing_bill_email_dialog(po_id, customer_id, " ".join(check.warnings))
+        else:
+            _create_qbo_invoice(po_id)
 
 
-def _create_qbo_invoice(po_id: int) -> None:
+@st.dialog("No bill-to email")
+def missing_bill_email_dialog(po_id: int, customer_id: int, message: str) -> None:
+    st.warning(message)
+    st.write(
+        "QuickBooks will create the invoice with no email on it. You can add one to the "
+        "customer first, or create the invoice anyway."
+    )
+    st.markdown(
+        f'<a href="/customers?customer_id={customer_id}" target="_self">'
+        "Add an email on the customer →</a>",
+        unsafe_allow_html=True,
+    )
+    col_send, col_cancel = st.columns(2)
+    with col_send:
+        if st.button("Send anyway", type="primary", width="stretch", key="qbo_send_no_email_btn"):
+            _create_qbo_invoice(po_id, send_without_email=True)
+    with col_cancel:
+        if st.button("Cancel", width="stretch", key="qbo_send_no_email_cancel_btn"):
+            st.rerun()
+
+
+def _create_qbo_invoice(po_id: int, send_without_email: bool = False) -> None:
     try:
         with st.spinner("Creating the invoice in QuickBooks…"):
             with session_scope() as session:
-                invoice = qbo_sync.create_invoice(session, po_id)
+                invoice = qbo_sync.create_invoice(
+                    session, po_id, send_without_email=send_without_email
+                )
                 number = invoice.doc_number or invoice.qbo_invoice_id
                 po_filled = getattr(invoice, "po_number_filled", True)
                 po_number = get_purchase_order(session, po_id).po_number

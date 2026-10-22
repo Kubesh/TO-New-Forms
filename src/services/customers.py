@@ -64,6 +64,21 @@ DEFAULT_DUE_DATE_DAYS = 14
 DUE_DATE_DAYS_BY_CUSTOMER_TYPE = {"Chain": 7, "Distributor": 21}
 
 
+_EMAIL_RE = re.compile(r"[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+")
+
+
+def normalize_emails(raw: str | None) -> tuple[str | None, str | None]:
+    """(cleaned, error) for an email field holding one or several addresses
+    separated by commas or semicolons. Blank is fine (None, None)."""
+    parts = [p.strip() for p in re.split(r"[,;]", raw or "") if p.strip()]
+    if not parts:
+        return None, None
+    bad = [p for p in parts if not _EMAIL_RE.fullmatch(p)]
+    if bad:
+        return None, f"Not a valid email address: {', '.join(bad)}"
+    return ", ".join(parts), None
+
+
 def resolve_due_date_days(customer: Customer | None) -> int:
     """Default PO due-date offset in days: 14 for everyone, 7 for chains,
     21 for distributors, keyed off the customer's customer_type."""

@@ -10,6 +10,7 @@ from src.services.customers import (
     count_customers,
     create_customer,
     format_phone_number,
+    normalize_emails,
     format_postal_code,
     get_customer,
     get_duplicate_customer_names,
@@ -46,6 +47,17 @@ def _apply_phone_formatting(values: dict) -> str | None:
     if error:
         return error
     values["phone_number"] = formatted
+    return None
+
+
+def _apply_email_validation(values: dict) -> str | None:
+    """Cleans values["bill_to_email"] / ["ship_to_email"] in place; returns an
+    error message if either is invalid, else None."""
+    for key, label in (("bill_to_email", "Bill-to email"), ("ship_to_email", "Ship-to email")):
+        cleaned, error = normalize_emails(values[key])
+        if error:
+            return f"{label}: {error}"
+        values[key] = cleaned
     return None
 
 
@@ -394,6 +406,10 @@ def _render_detail(customer_id: int) -> None:
         st.write(f"Parent account: **{customer.parent.customer_name}**")
     if customer.phone_number:
         st.write(f"Phone: {customer.phone_number}")
+    if customer.bill_to_email:
+        st.write(f"Bill-to email: {customer.bill_to_email}")
+    if customer.ship_to_email:
+        st.write(f"Ship-to email: {customer.ship_to_email}")
     if customer.store_key is not None:
         st.caption(f"Previous store key: {customer.store_key}")
 
@@ -561,6 +577,21 @@ def _render_customer_form(
         key=f"{key_prefix}_phone_number",
     )
 
+    bill_to_email = st.text_input(
+        "Bill-to email",
+        value=default.get("bill_to_email") or "",
+        max_chars=255,
+        help="Where QuickBooks invoices go. Separate several addresses with commas. "
+        "A store with none uses its parent account's.",
+        key=f"{key_prefix}_bill_to_email",
+    )
+    ship_to_email = st.text_input(
+        "Ship-to email",
+        value=default.get("ship_to_email") or "",
+        max_chars=255,
+        key=f"{key_prefix}_ship_to_email",
+    )
+
     notes = st.text_input(
         "Notes", value=default.get("notes") or "", max_chars=100, key=f"{key_prefix}_notes"
     )
@@ -677,6 +708,8 @@ def _render_customer_form(
         default_order_type_id=default_order_type_id,
         parent_id=parent_id,
         phone_number=phone_number.strip() or None,
+        bill_to_email=bill_to_email.strip() or None,
+        ship_to_email=ship_to_email.strip() or None,
         notes=notes.strip() or None,
         billing_address_line1=billing_fields["address_line1"],
         billing_address_line2=billing_fields["address_line2"],
@@ -711,6 +744,8 @@ def edit_customer_dialog(customer_id: int) -> None:
         default_order_type_id=customer.default_order_type_id,
         parent_id=customer.parent_id,
         phone_number=customer.phone_number,
+        bill_to_email=customer.bill_to_email,
+        ship_to_email=customer.ship_to_email,
         notes=customer.notes,
         billing_address_line1=customer.billing_address_line1,
         billing_address_line2=customer.billing_address_line2,
@@ -731,7 +766,7 @@ def edit_customer_dialog(customer_id: int) -> None:
     col_save, col_cancel = st.columns(2)
     with col_save:
         if st.button("Save", type="primary", width="stretch", key="edit_save_btn"):
-            phone_error = _apply_phone_formatting(values)
+            phone_error = _apply_phone_formatting(values) or _apply_email_validation(values)
             if not values["customer_name"]:
                 st.error("Customer name is required.")
             elif phone_error:
@@ -760,7 +795,7 @@ def add_customer_dialog() -> None:
     col_save, col_cancel = st.columns(2)
     with col_save:
         if st.button("Save", type="primary", width="stretch", key="add_save_btn"):
-            phone_error = _apply_phone_formatting(values)
+            phone_error = _apply_phone_formatting(values) or _apply_email_validation(values)
             if not values["customer_name"]:
                 st.error("Customer name is required.")
             elif phone_error:

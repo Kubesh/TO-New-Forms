@@ -52,6 +52,11 @@ class InvoiceBlocked(Exception):
         self.reasons = reasons
 
 
+class MissingBillEmail(InvoiceBlocked):
+    """Neither the customer nor its parent account has a bill-to email. The
+    caller may retry with send_without_email=True once the person agrees."""
+
+
 def current_realm(session: Session) -> str | None:
     connection = qb.get_connection(session)
     return connection.realm_id if connection else None
@@ -317,6 +322,8 @@ def plan_item_matches(session: Session) -> tuple[list[tuple[Item, dict]], int]:
 class InvoiceCheck:
     excluded: str | None = None  # why this order never goes to QuickBooks
     blockers: list[str] = field(default_factory=list)
+    # Things worth confirming but not blocking (e.g. no bill-to email).
+    warnings: list[str] = field(default_factory=list)
     invoice: QboInvoice | None = None  # the PO's live invoice, if it has one
 
     @property
@@ -371,6 +378,8 @@ def check_invoice(session: Session, po: PurchaseOrder) -> InvoiceCheck:
         target, target_link = invoice_target(session, po.customer)
         if realm and target_link is None:
             check.blockers.append(f"{target.customer_name} isn't linked to a QuickBooks customer.")
+        if resolve_bill_email(po.customer) is None:
+            check.warnings.append(missing_email_message(po.customer))
     lines = _live_lines(po)
     if not lines:
         check.blockers.append("The PO has no lines with a quantity.")
@@ -484,35 +493,47 @@ def invoice_custom_fields(session: Session) -> dict[str, str]:
     return find_po_field(session)[1]
 
 
-def customer_billing_details(session: Session, qbo_customer_id: str) -> dict:
-    """What an invoice should copy from a QuickBooks customer, because the API
-    (unlike the QuickBooks screen) doesn't fill it in: its payment terms as a
-    SalesTermRef and its email. Each is None if the customer has none."""
+def resolve_bill_email(customer: Customer) -> str | None:
+    """The bill-to email an invoice for this customer is sent with: the
+    customer's own, else its parent account's, else None."""
+    for source in (customer, customer.parent):
+        email = ((source.bill_to_email if source else None) or "").strip()
+        if email:
+            return ",".join(part.strip() for part in email.split(","))
+    return None
+
+
+def missing_email_message(customer: Customer) -> str:
+    if customer.parent is not None:
+        return (
+            f"Neither {customer.customer_name} nor its parent account "
+            f"{customer.parent.customer_name} has a bill-to email."
+        )
+    return f"{customer.customer_name} has no bill-to email."
+
+
+def customer_terms(session: Session, qbo_customer_id: str) -> dict | None:
+    """The payment terms set on a QuickBooks customer, as an invoice
+    SalesTermRef, or None. (The API doesn't copy these onto the invoice the
+    way the QuickBooks screen does.)"""
     rows = qb.query(
         session,
         f"select * from Customer where Id = '{qb.escape_literal(qbo_customer_id)}'",
         page_size=2,
     )
-    row = rows[0] if rows else {}
-    ref = row.get("SalesTermRef")
-    email = ((row.get("PrimaryEmailAddr") or {}).get("Address") or "").strip()
-    return {
-        "terms": {"value": ref["value"]} if ref and ref.get("value") else None,
-        "email": email or None,
-    }
+    ref = rows[0].get("SalesTermRef") if rows else None
+    return {"value": ref["value"]} if ref and ref.get("value") else None
 
 
-def _invoice_billing(session: Session, customer: Customer, qbo_customer_id: str) -> dict:
-    """Terms and email for an invoice to the linked QuickBooks customer; a
-    store linked to its own sub-customer uses its parent's for whichever of
-    the two the sub-customer doesn't have."""
-    details = customer_billing_details(session, qbo_customer_id)
-    if customer.parent is not None and not all(details.values()):
+def _invoice_terms(session: Session, customer: Customer, qbo_customer_id: str) -> dict | None:
+    """Terms for an invoice to the linked QuickBooks customer; a store linked
+    to its own sub-customer with no terms of its own uses its parent's."""
+    terms = customer_terms(session, qbo_customer_id)
+    if terms is None and customer.parent is not None:
         parent_link = get_customer_link(session, customer.parent.customer_id)
         if parent_link is not None and parent_link.qbo_customer_id != qbo_customer_id:
-            parent = customer_billing_details(session, parent_link.qbo_customer_id)
-            details = {key: details[key] or parent[key] for key in details}
-    return details
+            terms = customer_terms(session, parent_link.qbo_customer_id)
+    return terms
 
 
 def build_invoice_payload(
@@ -520,7 +541,8 @@ def build_invoice_payload(
     qbo_customer_id: str,
     item_links: dict[int, QboItemLink],
     po_field: tuple[str, str, bool] | None = None,
-    billing: dict | None = None,
+    sales_term_ref: dict | None = None,
+    bill_email: str | None = None,
 ) -> dict:
     lines = []
     for line in _live_lines(po):
@@ -553,13 +575,12 @@ def build_invoice_payload(
         ]
     # The PO's due date is the internal shipping due date, so it is never sent.
     # The customer's own payment terms are, and QuickBooks works out the
-    # invoice's due date from them. The email is sent as the invoice's bill-to
-    # email (the API doesn't copy it from the customer).
-    billing = billing or {}
-    if billing.get("terms"):
-        payload["SalesTermRef"] = billing["terms"]
-    if billing.get("email"):
-        payload["BillEmail"] = {"Address": billing["email"]}
+    # invoice's due date from them. The bill-to email comes from the app's own
+    # customer record.
+    if sales_term_ref:
+        payload["SalesTermRef"] = sales_term_ref
+    if bill_email:
+        payload["BillEmail"] = {"Address": bill_email}
     ship_to = po.customer
     address = _address("shipping", ship_to)
     if address:
@@ -579,7 +600,9 @@ def invoice_total(po: PurchaseOrder) -> Decimal:
     )
 
 
-def create_invoice(session: Session, po_id: int) -> QboInvoice:
+def create_invoice(
+    session: Session, po_id: int, send_without_email: bool = False
+) -> QboInvoice:
     """Creates the PO's invoice in QuickBooks (unsent). Raises InvoiceBlocked
     if it can't be created yet, QuickBooksError if QuickBooks refuses."""
     po = get_purchase_order(session, po_id)
@@ -594,6 +617,8 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
         )
     if check.blockers:
         raise InvoiceBlocked(check.blockers)
+    if check.warnings and not send_without_email:
+        raise MissingBillEmail(check.warnings)
 
     # Lines that were unpriced when entered get today's pricing (existing
     # prices are never changed).
@@ -618,7 +643,8 @@ def create_invoice(session: Session, po_id: int) -> QboInvoice:
         qbo_customer_id,
         current_item_links(session),
         po_field,
-        _invoice_billing(session, po.customer, qbo_customer_id),
+        _invoice_terms(session, po.customer, qbo_customer_id),
+        resolve_bill_email(po.customer),
     )
     total = invoice_total(po)
 
