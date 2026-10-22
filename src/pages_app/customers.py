@@ -323,7 +323,7 @@ def _type_badge_style(color: str | None) -> str:
     r, g, b = (int(color[i : i + 2], 16) for i in (1, 3, 5))
     # Perceived brightness (ITU-R BT.601); above ~150 is light enough for dark text.
     text = "#1A1712" if (r * 299 + g * 587 + b * 114) / 1000 > 150 else "#FFFFFF"
-    return f' style="background: {color}; color: {text} !important;"'
+    return f' style="background: {color}; color: {text};"'
 
 
 def _card_html(customer, is_duplicate: bool, po_count: int = 0) -> str:
