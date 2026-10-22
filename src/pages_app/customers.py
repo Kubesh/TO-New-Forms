@@ -1,5 +1,6 @@
 import html
 import logging
+import re
 
 import streamlit as st
 
@@ -20,6 +21,7 @@ from src.services.customers import (
     search_customers,
     update_customer,
 )
+from src.pages_app.customer_types import DEFAULT_COLOR
 from src.pages_app.pricing_editor import render_pricing
 from src.pages_app.quickbooks import link_customer_dialog
 from src.pages_app.purchase_orders import create_po_dialog, render_po_table
@@ -311,6 +313,19 @@ def _shipping_address_line(customer) -> str:
     return ", ".join(filter(None, [customer.shipping_address_line1, city_state_zip]))
 
 
+def _type_badge_style(color: str | None) -> str:
+    """Inline fill for a customer-type pill, with black or white text,
+    whichever reads better on that fill. Falls back to the same default the
+    Customer Types page uses for a type with no color picked yet."""
+    color = color or DEFAULT_COLOR
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+        return ""
+    r, g, b = (int(color[i : i + 2], 16) for i in (1, 3, 5))
+    # Perceived brightness (ITU-R BT.601); above ~150 is light enough for dark text.
+    text = "#1A1712" if (r * 299 + g * 587 + b * 114) / 1000 > 150 else "#FFFFFF"
+    return f' style="background: {color}; color: {text};"'
+
+
 def _card_html(customer, is_duplicate: bool, po_count: int = 0) -> str:
     name = html.escape(customer.customer_name)
     type_name = html.escape(customer.customer_type.name) if customer.customer_type else None
@@ -323,7 +338,8 @@ def _card_html(customer, is_duplicate: bool, po_count: int = 0) -> str:
 
     top_badges = []
     if type_name:
-        top_badges.append(f'<span class="customer-card-badge">{type_name}</span>')
+        badge_style = _type_badge_style(customer.customer_type.color)
+        top_badges.append(f'<span class="customer-card-badge"{badge_style}>{type_name}</span>')
     if is_duplicate:
         top_badges.append(
             '<span class="customer-card-badge customer-card-badge-dup">Duplicate name</span>'
