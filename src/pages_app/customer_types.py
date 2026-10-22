@@ -38,7 +38,7 @@ def customer_types_page() -> None:
 def _card_html(href: str, name: str, detail: str, accent: str = "#1A1712") -> str:
     return (
         f'<a class="cat-card-link" href="{href}" target="_self">'
-        f'<div class="cat-card" style="--cat-color: {accent};">'
+        f'<div class="cat-card" style="--cat-color: {html.escape(accent, quote=True)};">'
         f'<div class="cat-card-name">{html.escape(name)}</div>'
         f'<div class="cat-card-count">{html.escape(detail)}</div>'
         "</div></a>"
@@ -71,6 +71,7 @@ def _render_list() -> None:
             f"?customer_type_id={t.customer_type_id}",
             t.name,
             _count_label(counts.get(t.customer_type_id, 0)),
+            t.color or DEFAULT_COLOR,
         )
         for t in types
     ]
