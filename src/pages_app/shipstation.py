@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import streamlit as st
 
@@ -5,6 +7,7 @@ from src.db import session_scope
 from src.services.order_shipstation import check_all_labels, list_recent_sends
 from src.services.app_settings import set_setting
 from src.services.shipstation import (
+    BASE_URL,
     ShipStationError,
     ShipStationNotConfigured,
     INSURANCE_SETTING_KEY,
@@ -27,6 +30,36 @@ def shipstation_page() -> None:
         "POs are sent to ShipStation from their detail page. Labels created there are "
         "picked up by the label check on the PO (or the scheduled sync script)."
     )
+    tab_connection, tab_defaults, tab_sends = st.tabs(["Connection", "Defaults", "Recent sends"])
+    with tab_connection:
+        _render_connection()
+    with tab_defaults:
+        _render_store()
+        _render_shipping_method()
+        _render_insurance()
+    with tab_sends:
+        _render_recent_sends()
+
+
+def _masked(value: str | None) -> str:
+    """Whether a credential is set, showing only its last 4 characters."""
+    value = (value or "").strip()
+    if not value:
+        return "not set"
+    return f"set (ends in {value[-4:]})" if len(value) > 8 else "set"
+
+
+def _render_connection() -> None:
+    key = os.environ.get("SHIPSTATION_API_KEY")
+    secret = os.environ.get("SHIPSTATION_API_SECRET")
+    st.write(f"**Account:** ShipStation (classic API, {BASE_URL.removeprefix('https://')})")
+    st.write(f"**API key:** {_masked(key)}")
+    st.write(f"**API secret:** {_masked(secret)}")
+    if not (key and secret):
+        st.warning(
+            "SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET aren't both set in .env. Get them "
+            "from ShipStation under Settings > Account > API Settings."
+        )
 
     if st.button("Test connection", key="shipstation_test"):
         try:
@@ -53,11 +86,9 @@ def shipstation_page() -> None:
             )
         except (ShipStationNotConfigured, ShipStationError) as exc:
             st.error(str(exc))
-    _render_store()
-    _render_shipping_method()
-    _render_insurance()
 
-    st.subheader("Recent sends")
+
+def _render_recent_sends() -> None:
     _render_check_labels()
     try:
         with session_scope() as session:
