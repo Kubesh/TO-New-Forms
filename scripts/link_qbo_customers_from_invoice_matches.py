@@ -19,7 +19,8 @@ which app customer its matched POs belong to. A pair is linked only when:
 Pairs with fewer matches than --min-matches are listed with a name similarity
 so they can be eyeballed; they are linked anyway only if the names are very
 close (--name-ratio, default 0.85). --dry-run changes nothing. --report FILE
-writes every pair and its outcome as a CSV.
+writes every pair and its outcome as a CSV; --xlsx FILE writes a workbook with
+one sheet per outcome (Linked, Review, Conflict, Skipped) to go through by hand.
 """
 import argparse
 import csv
@@ -110,6 +111,46 @@ def decide(pair, by_qbo, by_app, session, taken, min_matches, min_ratio) -> tupl
     return "link", ""
 
 
+XLSX_SHEETS = [
+    ("Linked", ("link", "already linked")),
+    ("Review", ("review",)),
+    ("Conflict", ("conflict",)),
+    ("Skipped", ("skipped",)),
+]
+XLSX_HEADER = ["QuickBooks customer", "QuickBooks ID", "App customer", "App customer ID",
+               "Invoices", "Example POs", "Name similarity", "Outcome", "Detail"]
+
+
+def write_xlsx(path, results) -> None:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    for title, outcomes in XLSX_SHEETS:
+        sheet = workbook.create_sheet(title)
+        sheet.append(XLSX_HEADER)
+        # Conflicts are easier to read with both sides of a disagreement together.
+        rows = sorted(
+            (r for r in results if r[1] in outcomes),
+            key=lambda r: (_alnum(r[0]["qbo_name"]), -r[0]["count"]),
+        )
+        for pair, outcome, detail in rows:
+            sheet.append([
+                pair["qbo_name"], pair["qbo_id"], pair["app_name"], pair["app_id"], pair["count"],
+                ", ".join(pair["pos"]), round(name_ratio(pair["qbo_name"], pair["app_name"]), 2),
+                outcome, detail,
+            ])
+        for cell in sheet[1]:
+            cell.font = Font(bold=True)
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        for index, width in enumerate([38, 14, 44, 14, 10, 38, 16, 14, 70], start=1):
+            sheet.column_dimensions[get_column_letter(index)].width = width
+    workbook.save(path)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("csv", help="the report from qbo_match_invoices_to_pos.py")
@@ -117,6 +158,7 @@ def main(argv=None) -> int:
     parser.add_argument("--min-matches", type=int, default=2, help="invoices needed to link (default 2)")
     parser.add_argument("--name-ratio", type=float, default=0.85, help="name similarity that lets a single match link")
     parser.add_argument("--report", help="write every pair and its outcome to this CSV file")
+    parser.add_argument("--xlsx", help="write a workbook with a sheet per outcome to this file")
     args = parser.parse_args(argv)
 
     load_dotenv()
@@ -157,6 +199,9 @@ def main(argv=None) -> int:
             line = f"  {pair['qbo_name']}  ->  {pair['app_name']} (id {pair['app_id']}), {pair['count']} invoice(s), PO {', '.join(pair['pos'])}"
             print(line + (f"  [{detail}]" if detail else ""))
 
+    if args.xlsx:
+        write_xlsx(args.xlsx, results)
+        print(f"\nWrote {args.xlsx}")
     if args.report:
         with open(args.report, "w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
