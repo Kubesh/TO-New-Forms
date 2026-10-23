@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from src.models import (
@@ -43,6 +43,9 @@ from src.services.pricing import line_amount, resolve_prices
 from src.services.purchase_orders import get_purchase_order, price_unpriced_lines
 
 SEARCH_LIMIT = 25
+# Invoices get their number from the app (QuickBooks' own numbering is off),
+# as <prefix><next number from qbo_invoice_number_seq>.
+INVOICE_NUMBER_PREFIX = os.environ.get("QBO_INVOICE_PREFIX", "O-")
 
 
 class InvoiceBlocked(Exception):
@@ -499,6 +502,29 @@ def check_invoice(session: Session, po: PurchaseOrder) -> InvoiceCheck:
     return check
 
 
+def next_invoice_number(session: Session) -> str:
+    return f"{INVOICE_NUMBER_PREFIX}{session.scalar(text('SELECT nextval(\'qbo_invoice_number_seq\')'))}"
+
+
+def _invoice_number_for_attempt(session: Session, po_id: int, realm: str) -> str:
+    """The number for a new attempt. If this PO's last attempt was refused
+    (or never got an answer) its number never made it onto an invoice, so it is
+    reused instead of leaving a gap, unless QuickBooks refused it as a duplicate."""
+    last = session.scalars(
+        select(QboInvoice)
+        .where(QboInvoice.po_id == po_id, QboInvoice.realm_id == realm)
+        .order_by(QboInvoice.qbo_invoice_record_id.desc())
+    ).first()
+    if (
+        last is not None
+        and last.status in ("failed", "pending")
+        and last.doc_number
+        and "uplicate" not in (last.error or "")
+    ):
+        return last.doc_number
+    return next_invoice_number(session)
+
+
 PO_FIELD_MAX_LENGTH = 31  # QuickBooks custom field values are limited to 31 characters
 
 
@@ -638,6 +664,7 @@ def build_invoice_payload(
     po_field: tuple[str, str, bool] | None = None,
     sales_term_ref: dict | None = None,
     bill_email: str | None = None,
+    doc_number: str | None = None,
 ) -> dict:
     lines = []
     for line in _live_lines(po):
@@ -672,6 +699,8 @@ def build_invoice_payload(
     # The customer's own payment terms are, and QuickBooks works out the
     # invoice's due date from them. The bill-to email comes from the app's own
     # customer record.
+    if doc_number:
+        payload["DocNumber"] = doc_number
     if sales_term_ref:
         payload["SalesTermRef"] = sales_term_ref
     if bill_email:
@@ -733,18 +762,12 @@ def create_invoice(
     realm = current_realm(session)
     _, target_link = invoice_target(session, po.customer)
     qbo_customer_id = target_link.qbo_customer_id
-    payload = build_invoice_payload(
-        po,
-        qbo_customer_id,
-        current_item_links(session),
-        po_field,
-        _invoice_terms(session, po.customer, qbo_customer_id),
-        resolve_bill_email(po.customer),
-    )
+    terms = _invoice_terms(session, po.customer, qbo_customer_id)
     total = invoice_total(po)
 
     # An earlier attempt whose outcome is unknown is retried under the same
-    # request id, so QuickBooks returns that invoice rather than a second one.
+    # request id (and the same invoice number), so QuickBooks returns that
+    # invoice rather than a second one.
     attempt = session.scalars(
         select(QboInvoice)
         .where(
@@ -761,12 +784,25 @@ def create_invoice(
             request_id=uuid.uuid4().hex,
             status="pending",
             qbo_customer_id=qbo_customer_id,
+            doc_number=_invoice_number_for_attempt(session, po_id, realm),
             total_amount=total,
         )
         session.add(attempt)
     else:
         attempt.qbo_customer_id, attempt.total_amount = qbo_customer_id, total
+        if not attempt.doc_number:
+            attempt.doc_number = next_invoice_number(session)
     session.commit()
+
+    payload = build_invoice_payload(
+        po,
+        qbo_customer_id,
+        current_item_links(session),
+        po_field,
+        terms,
+        resolve_bill_email(po.customer),
+        attempt.doc_number,
+    )
 
     try:
         data = qb._request(
@@ -789,7 +825,7 @@ def create_invoice(
     invoice = data["Invoice"]
     attempt.status = "created"
     attempt.qbo_invoice_id = str(invoice["Id"])
-    attempt.doc_number = invoice.get("DocNumber")
+    attempt.doc_number = invoice.get("DocNumber") or attempt.doc_number
     attempt.error = None
     attempt.intuit_tid = qb.last_intuit_tid()
     if attempt.doc_number and not (po.invoice_number or "").strip():
