@@ -563,7 +563,8 @@ def update_invoice_numbering(session: Session, prefix: str, number: int) -> None
 
 def next_invoice_number(session: Session) -> str:
     prefix = get_invoice_prefix(session)
-    return f"{prefix}{session.scalar(text('SELECT nextval(\'qbo_invoice_number_seq\')'))}"
+    number = session.scalar(text("SELECT nextval('qbo_invoice_number_seq')"))
+    return f"{prefix}{number}"
 
 
 def _invoice_number_for_attempt(session: Session, po_id: int, realm: str) -> str:
