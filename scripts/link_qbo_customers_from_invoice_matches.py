@@ -18,7 +18,16 @@ which app customer its matched POs belong to. A pair is linked only when:
 
 Pairs with fewer matches than --min-matches are listed with a name similarity
 so they can be eyeballed; they are linked anyway only if the names are very
-close (--name-ratio, default 0.85). --dry-run changes nothing. --report FILE
+close (--name-ratio, default 0.85).
+
+Optional, off by default:
+  --dominant      also link a conflicted pair that clearly wins: at least 2
+                  invoices, and each rival pair is either a single invoice or
+                  has at most a third of its count, and is itself outvoted on
+                  its other side (so it is a stray, not a real second customer).
+                  The losing pairs are reported as strays, never linked.
+  --link-review   link the pairs that would only be listed for review, except
+                  the app customer ids given in --skip-app-ids. --dry-run changes nothing. --report FILE
 writes every pair and its outcome as a CSV; --xlsx FILE writes a workbook with
 one sheet per outcome (Linked, Review, Conflict, Skipped) to go through by hand.
 """
@@ -83,20 +92,56 @@ def load_pairs(path: str) -> list[dict]:
     return list(pairs.values())
 
 
-def decide(pair, by_qbo, by_app, session, taken, min_matches, min_ratio) -> tuple[str, str]:
-    others = [p for p in by_qbo[pair["qbo_id"]] if p is not pair]
+def dominates(winner, rival) -> bool:
+    if rival["count"] == 1:
+        return winner["count"] >= 2
+    return winner["count"] >= 3 * rival["count"]
+
+
+def find_strays(pairs, by_qbo, by_app) -> dict:
+    """{id(stray pair): winning pair}. A winner outvotes every rival it shares a
+    customer with, and each rival is outvoted on its other customer too (or is
+    a single invoice), which marks it as a stray rather than a real duplicate."""
+    strays: dict = {}
+    for winner in pairs:
+        rivals = [(c, by_app) for c in by_qbo[winner["qbo_id"]] if c is not winner]
+        rivals += [(c, by_qbo) for c in by_app[winner["app_id"]] if c is not winner]
+        if not rivals or not all(dominates(winner, c) for c, _ in rivals):
+            continue
+        orphaned = True
+        for rival, other_index in rivals:
+            other_key = rival["app_id"] if other_index is by_app else rival["qbo_id"]
+            if rival["count"] > 1 and not any(
+                d is not rival and d["count"] >= 3 * rival["count"] for d in other_index[other_key]
+            ):
+                orphaned = False
+        if orphaned:
+            for rival, _ in rivals:
+                strays[id(rival)] = winner
+    return strays
+
+
+def decide(pair, by_qbo, by_app, session, taken, min_matches, min_ratio, strays=(), link_review=False, skip_app_ids=()) -> tuple[str, str]:
+    if id(pair) in strays:
+        win = strays[id(pair)]
+        return "stray", f"outvoted by {win['qbo_name']} -> {win['app_name']} ({win['count']})"
+    live = lambda p: p is not pair and id(p) not in strays  # noqa: E731
+    others = [p for p in by_qbo[pair["qbo_id"]] if live(p)]
     if others:
         return "conflict", "QuickBooks customer also matches: " + ", ".join(
             f"{p['app_name']} ({p['count']})" for p in others
         )
-    others = [p for p in by_app[pair["app_id"]] if p is not pair]
+    others = [p for p in by_app[pair["app_id"]] if live(p)]
     if others:
         return "conflict", "app customer also matches: " + ", ".join(
             f"{p['qbo_name']} ({p['count']})" for p in others
         )
     ratio = name_ratio(pair["qbo_name"], pair["app_name"])
     if pair["count"] < min_matches and ratio < min_ratio:
-        return "review", f"only {pair['count']} match(es) and names differ (similarity {ratio:.2f})"
+        if not link_review:
+            return "review", f"only {pair['count']} match(es) and names differ (similarity {ratio:.2f})"
+        if pair["app_id"] in skip_app_ids:
+            return "excluded", f"left out by --skip-app-ids (similarity {ratio:.2f})"
     customer = session.get(Customer, pair["app_id"])
     if customer is None:
         return "skipped", "app customer no longer exists"
@@ -111,14 +156,30 @@ def decide(pair, by_qbo, by_app, session, taken, min_matches, min_ratio) -> tupl
     return "link", ""
 
 
-XLSX_SHEETS = [
-    ("Linked", ("link", "already linked")),
-    ("Review", ("review",)),
-    ("Conflict", ("conflict",)),
-    ("Skipped", ("skipped",)),
-]
 XLSX_HEADER = ["QuickBooks customer", "QuickBooks ID", "App customer", "App customer ID",
                "Invoices", "Example POs", "Name similarity", "Outcome", "Detail"]
+
+
+def report_sheets(results) -> list[tuple[str, list]]:
+    """Sheets for the workbook: what was linked, then the things to resolve by hand."""
+    conflicts = [r for r in results if r[1] == "conflict"]
+    by_app: dict = defaultdict(list)
+    by_qbo: dict = defaultdict(list)
+    for row in conflicts:
+        by_app[row[0]["app_id"]].append(row)
+        by_qbo[row[0]["qbo_id"]].append(row)
+    two_qb = [r for rows in by_app.values() if len(rows) > 1 for r in rows]
+    two_app = [r for rows in by_qbo.values() if len(rows) > 1 for r in rows]
+    shown = {id(r[0]) for r in two_qb + two_app}
+    other = [r for r in conflicts if id(r[0]) not in shown]
+    other += [r for r in results if r[1] in ("review", "excluded", "skipped")]
+    return [
+        ("Linked", [r for r in results if r[1] in ("link", "already linked")]),
+        ("Strays", [r for r in results if r[1] == "stray"]),
+        ("2 QB to 1 app", sorted(two_qb, key=lambda r: (r[0]["app_id"], -r[0]["count"]))),
+        ("1 QB to 2 app", sorted(two_app, key=lambda r: (r[0]["qbo_id"], -r[0]["count"]))),
+        ("Not linked", other),
+    ]
 
 
 def write_xlsx(path, results) -> None:
@@ -128,14 +189,11 @@ def write_xlsx(path, results) -> None:
 
     workbook = Workbook()
     workbook.remove(workbook.active)
-    for title, outcomes in XLSX_SHEETS:
+    for title, rows in report_sheets(results):
         sheet = workbook.create_sheet(title)
         sheet.append(XLSX_HEADER)
-        # Conflicts are easier to read with both sides of a disagreement together.
-        rows = sorted(
-            (r for r in results if r[1] in outcomes),
-            key=lambda r: (_alnum(r[0]["qbo_name"]), -r[0]["count"]),
-        )
+        if title == "Linked":
+            rows = sorted(rows, key=lambda r: _alnum(r[0]["qbo_name"]))
         for pair, outcome, detail in rows:
             sheet.append([
                 pair["qbo_name"], pair["qbo_id"], pair["app_name"], pair["app_id"], pair["count"],
@@ -157,6 +215,9 @@ def main(argv=None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="show what would be linked, change nothing")
     parser.add_argument("--min-matches", type=int, default=2, help="invoices needed to link (default 2)")
     parser.add_argument("--name-ratio", type=float, default=0.85, help="name similarity that lets a single match link")
+    parser.add_argument("--dominant", action="store_true", help="also link conflicted pairs that clearly win")
+    parser.add_argument("--link-review", action="store_true", help="also link the pairs that would be listed for review")
+    parser.add_argument("--skip-app-ids", default="", help="comma-separated app customer ids --link-review leaves out")
     parser.add_argument("--report", help="write every pair and its outcome to this CSV file")
     parser.add_argument("--xlsx", help="write a workbook with a sheet per outcome to this file")
     args = parser.parse_args(argv)
@@ -173,11 +234,14 @@ def main(argv=None) -> int:
     for pair in pairs:
         by_qbo[pair["qbo_id"]].append(pair)
         by_app[pair["app_id"]].append(pair)
+    strays = find_strays(pairs, by_qbo, by_app) if args.dominant else {}
+    skip_app_ids = {int(x) for x in args.skip_app_ids.split(",") if x.strip()}
     taken = {l.qbo_customer_id: cid for cid, l in qbo_sync.customer_links_by_id(session).items()}
 
     results = []
     for pair in sorted(pairs, key=lambda p: -p["count"]):
-        outcome, detail = decide(pair, by_qbo, by_app, session, taken, args.min_matches, args.name_ratio)
+        outcome, detail = decide(pair, by_qbo, by_app, session, taken, args.min_matches,
+                                 args.name_ratio, strays, args.link_review, skip_app_ids)
         if outcome == "link":
             if not args.dry_run:
                 try:
@@ -189,7 +253,7 @@ def main(argv=None) -> int:
         results.append((pair, outcome, detail))
 
     verb = {"link": "Would link" if args.dry_run else "Linked"}
-    for outcome in ("link", "already linked", "review", "conflict", "skipped"):
+    for outcome in ("link", "already linked", "stray", "review", "excluded", "conflict", "skipped"):
         group = [(p, d) for p, o, d in results if o == outcome]
         label = verb.get(outcome, outcome.capitalize())
         print(f"\n{label}: {len(group)}")
