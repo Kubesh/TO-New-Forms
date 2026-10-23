@@ -153,7 +153,8 @@ def _render_store() -> None:
         st.error(str(exc))
         return
     if options["store_id"]:
-        label = options["store_name"] or f"Store ID {options['store_id']}"
+        # Stores saved earlier carry a " - ShipStation" suffix.
+        label = (options["store_name"] or "").removesuffix(" - ShipStation") or f"Store ID {options['store_id']}"
         st.write(f"**Current:** {label}")
     else:
         st.write("**Current:** not set - ShipStation uses its own default.")
@@ -173,6 +174,8 @@ def _render_store() -> None:
 
     def store_label(store: dict) -> str:
         marketplace = store.get("marketplaceName")
+        if (marketplace or "").strip().lower() == "shipstation":
+            marketplace = None  # "Name - ShipStation" says nothing the page doesn't already
         inactive = "" if store.get("active", True) else " (inactive)"
         name = store.get("storeName") or f"Store {store.get('storeId')}"
         return f"{name} - {marketplace}{inactive}" if marketplace else f"{name}{inactive}"
