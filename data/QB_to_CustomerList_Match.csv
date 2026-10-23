@@ -1,0 +1,488 @@
+qb_name,qb_type,qb_street,qb_city,qb_state,qb_zip,qb_email,qb_phone,qb_open_balance,match_conf,name_score,evidence,cl_id,cl_name,cl_city,cl_state,cl_zip,cl_parent_id,note
+A Matter of Health Inc,Chain (deleted),1347 1st Avenue,New York,NY,10021,karma@amatterofhealthinc.com,(212) 396-4500,0,High,100,"phone,zip,city",5678,A Matter of Health,New York,NY,10021,,
+Bayside Food Group,Chain (deleted),"Bayside Food Group, LLC
+111 Center Ave, Suite C
+Pacheco CA 94553",,,,"accounting@baysidefood.com, brenda@baysidefood.com",,0,High,100,email,8392,Bayside Food Group,Pacheco,CA,94553,,
+Bear Foods Market,Chain (deleted),125 E Woodin Ave,Chelan,WA,98816,mercantile@bearfoodsmarket.com,(509) 682-5535,0,High,100,"phone,zip,email,city",5717,Bear Foods Market,Chelan,WA,98816,,
+Bumble B Design,Independent (deleted),1724 Northeast 90th Street,Seattle,WA,98115,bevin@bumblebdesign.com,(206) 769-7675,0,High,100,"phone,zip,email,city",5758,Bumble B Design,Seattle,WA,98115,,
+Bundles Gift Co.,,215 Cottonwood Lane,Aurora,CO,81611,wesley@bundlesgiftco.com,(970) 319-8819,0,High,100,"phone,zip",8610,Bundles Gift Co,Aspen,CO,81611,,
+Capella Market,,2489 Willamette St.,Eugene,OR,97405,grocery@capellamarket.com,(541) 345-1014,0,High,100,"phone,zip,email,city",8578,Capella Market,Eugene,OR,97405,,
+Capers Cafe,,7000 NE Airport Way #2520,Portland,OR,97124,"damienj@caperscafe.com, Accounting@caperscafe.com",,0,High,100,"email,city",5766,Capers Cafe,Portland,OR,97220,,
+Charlotte Wholesale Supplements,Independent (deleted),4128 South Blvd,Charlotte,NC,28209,tom@charlottesupplements.com,(704) 525-6311,0,High,100,"phone,zip,email,city",8157,Charlotte Wholesale Supplements,Charlotte,NC,28209,,
+Chequamegon Food Co-op,Independent - Non-Grocery,700 Main Street West,Ashland,WI,54806,mayaw@cheqfood.coop,(715) 682-8251,0,High,100,"phone,zip,email,city",8814,Chequamegon Food Co-op,Ashland,WI,548061459,,
+City Center Market,Independent - Non-Grocery,122 North Buchanan Street,Cambridge,MN,55008,steve@citycentermarket.coop,(763) 689-4640,0,High,90,,5782,City Market,Washington,DC,20001,,
+Columbia Health Foods,Independent (deleted),106 W 7th St,Columbia,TN,38401,Columbiahealthfoods@gmail.com,(931) 388-1148,0,High,100,"phone,zip,email,city",8178,Columbia Health Foods,Columbia,TN,38401,,
+Community Co-op Market,,1235 Apalachee Parkway,Tallahassee,FL,32301,billy.lunsford@communitycoopmarket.coop,(850) 399-2667,0,High,90,,7513,River Market Community Co-Op,Stillwater,MN,55082,,
+Crown Pacific Distribution,Distributor,"Crown Pacific Fine Foods_x000D_
+8809 s 190th st",Kent,WA,98031,"therese@cpff.net, mike@cpff.net",425.251.8750 Ex 32,2700,High,90,"zip,city",5797,Crown Pacific,Kent,WA,98031,,
+Durango Natural Foods Co-op,,575 E. 8th Ave.,Durango,CO,81301,rachel@durangonaturalfoods.coop,(970) 247-8129,0,High,100,"phone,zip,email,city",8198,Durango Natural Foods Co-op,Durango,CO,81301,,
+Eli's Market,,1415 3rd Ave,New York,NY,10028,adamr@elizabar.com,(212) 717-8100,0,High,100,"phone,zip,city",5823,Elis Market,New York,NY,10028,,
+Elliott's Natural Foods,Independent (deleted),3347 El Camino Ave,Sacremento,CA,95821,oneelliott@gmail.com,,0,High,100,"zip,email",8159,Elliott's Natural Foods,Sacramento,CA,95821,,
+Elm Wellness,,56 7th Ave,New York,NY,10011,elmhealth@aol.com,(212) 255-6300,0,High,100,"phone,zip,email,city",8175,Elm Wellness,New York,NY,10011,,
+Eureka Co-op,,25 4th Street,Eureka,CA,95501,kelsieparks@northcoast.coop,(707) 443-6027,114,High,100,"phone,zip,email,city",8820,Eureka Co-op,Eureka,CA,95501,,
+Eureka Natural Foods - McKinleyville,,2165 Central Ave.,McKinleyville,CA,95519,craig@eurekanaturalfoods.com,(707) 839-3636,0,High,90,,8162,Eureka Natural Foods (Eureka),Eureka,CA,95501,,
+Fiesta Nutrition Centers Inc,,1211 N 18th St,Monroe,LA,71201,"robin@fiestanutrition.com, jeff@blueskyrepresentation.com",3183878446,0,High,98,"phone,zip,city",8179,Fiesta Nutrition Center,Monroe,LA,71201,,
+Food Fight Grocery,Chain (deleted),"1217 SE Stark St,",Portland,OR,97214,chad@foodfightgrocery.com,(503) 233-3910,0,High,90,city,8180,Food Fight! Grocery Portland - Halsey,Portland,OR,97220,5653,
+Food Fight Grocery:Portland - Halsey,Chain (deleted),"1217 SE Stark St,",Portland,OR,97214,"stark@foodfightgrocery.com, chad@foodfightgrocery.com",(503) 889-0685,0,High,90,"phone,zip,city",5835,Food Fight,Portland,OR,97214,,
+Freeland Spirits,,2671 NW Vaughn St.,Portland,OR,97210,brooke@freelandspirits.com,(971) 279-5692,0,High,100,"zip,email,city",8576,Freeland Spirits,Portland,OR,97210,,
+Full Creative,Independent - Non-Grocery,"1033 SE MAIN ST, Suite 1_x000D_
+Oregon",Portland,OR,97214-3623,"connections@anywhere.co, beth@businessworkspdx.com",503-816-9550,0,High,100,"zip,email,city",5847,Full Creative,Portland,OR,97214,,
+G7 Entertainment Marketing,,801 18th Avenue South,Nashville,TN,37203,dpacitti@powdr.com,,0,High,100,"zip,email,city",8754,G7 Entertainment Marketing,Nashville,TN,37203,,
+Garage Grown Gear,Ecom Retail,2380 Wycliff St #140,St Paul,MN,55114,garagegrowngear@bill.com,,0,High,100,"zip,email,city",8776,Garage Grown Gear,St Paul,MN,55114,,
+Give Portland Gifts,,2026 N Terry St,Portland,OR,97217,gwen@giveportlandgifts.com,(503) 719-3196,0,High,100,"phone,zip,email,city",5852,Give Portland Gifts,Portland,OR,97217,,
+Glow Gifts,Chain (deleted),459 3rd St.,Lake Oswego,OR,97034,purchasing@glowgift.com,(503) 957-0871,0,High,100,"email,city",5854,Glow Gifts,Lake Oswego,OR,97035,,
+"Half Moon Outfitters, Inc.",Independent (deleted),1084 E Montague Ave,North Charleston,SC,29405,BRAD@HALFMOONOUTFITTERS.COM,(843) 853-3338,0,High,100,"zip,city",8181,Half-Moon Outfitters,North Charleston,SC,29405,,
+Health Foods Unlimited Inc,Chain (deleted),2250 Mmsburg Cntrville Rd,Dayton,OH,45459,rhonda@healthfoodsunlimited.com,(937) 433-5100,0,High,100,"phone,zip,city",8174,Health Foods Unlimited,Dayton,OH,45459,,
+hedge & vine,,10000 Main St. #102,Bellevue,WA,98004,info@hedgeandvine.com,(425) 451-7872,0,High,100,"phone,zip,email,city",5903,HEDGE & VINE,Bellevue,WA,98004,,
+KeHE Distributors,Distributor,9555 NE Alderwood R,Portland,OR,97220,"aptradeinvoices@kehe.com, poconfirmation@kehe.com",,0,High,100,parent account,5605,KeHE,,,,,
+KeHE Distributors:Dallas - Rock Quarry,Distributor,"KeHE Distributors
+PO Box 24830",Jacksonville,FL,32241,"aptradeinvoices@kehe.com, poconfirmation@kehe.com",,0,High,100,,8183,KeHE Dallas - Rock Quarry,Dallas,TX,75211,5605,
+KeHE Distributors:Douglasville - Riverside,Distributor,"Attn: Accounts Payable
+PO Box 24830",Jacksonville,FL,32241,"aptradeinvoices@kehe.com, poconfirmation@kehe.com, Jake.Morgan@kehe.com",,0,High,100,,5921,KeHE Douglasville - Riverside,Douglasville,GA,30135,5605,
+KeHE Distributors:Fort Lauderdale - Meridian,Distributor,"Attn: Accounts Payable
+PO Box 24830",Jacksonville,FL,92241,"aptradeinvoices@kehe.com, Jake.Morgan@kehe.com, orders@treehouseoriginals.com",,0,High,100,,5918,KeHE Fort Lauderdale - Meridian,Fort Lauderdale,FL,33331,5605,
+KeHE Distributors:Portland - Alderwood,Distributor,"Attn: Accounts Payable
+PO Box 24830",Jacksonville,FL,32241,"aptradeinvoices@kehe.com, poconfirmation@kehe.com, orders@treehouseoriginals.com",,0,High,100,,5920,KeHE Portland - Alderwood,Portland,OR,97220,5605,
+KeHE Distributors:Publix,,,,,,,,0,High,90,,5630,Publix,,,,,
+Le Beau Market,,1263 Leavenworth St,San Francisco,CA,94109,Lebeaunobhill@gmail.com,(415) 885-3030,0,High,100,"phone,zip,email,city",5934,Le Beau Market,San Francisco,CA,94109,,
+Liberty Mountain Distribution,Distributor,9816 S. Jordan Gateway (500 West),Sandy,UT,84070,ap@libertymountain.com,(801) 307-9200,0,High,100,,5936,Liberty Mountain Distribution,Montoursville,PA,17754,5608,
+MANZANITA FRESH FOODS,,730 MANZANITA AVE,MANZANITA,OR,97130,jason@freshfoodsmarketplace.com,5033685250,0,High,90,"phone,zip,city",8893,Manzanita Fresh Foods Marketplace,Manzanita,OR,97130,5674,
+Marina Supermarket,Independent (deleted),2323 Chestnut St,San Francisco,CA,94109,Marinasuper@comcast.net,(415) 346-7470,0,High,100,"phone,email,city",5958,Marina Supermarket,San Francisco,CA,94123,,
+Marion Acres LLC,Independent (deleted),23137 NW West Union Rd,Hillsboro,OR,97124,accounting@marionacres.com,5038195612,0,High,100,"zip,city",8170,Marion Acres,Hillsboro,OR,97124,,
+Mariposa Market,Independent - Non-Grocery,500 S. Main Street,Willits,CA,95490,grocery@mariposa-market.com,(707) 459-9630,0,High,100,"phone,zip,email,city",5959,Mariposa Market,Willits,CA,95490,,
+Natural Grocers Corporate,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,9036.45,High,100,parent account,5620,Natural Grocers,,,,,
+Natural Grocers Corporate:Albuquerque - Wyoming,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(505) 292-7300,166.9,High,100,phone,6009,Natural Grocers Albuquerque - Wyoming,Albuquerque,NM,87111,5620,
+Natural Grocers Corporate:Amarillo - 34th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6011,Natural Grocers Amarillo - 34th,Amarillo,TX,79121,5620,
+Natural Grocers Corporate:Arvada - Wadsworth,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 423-0990,0,High,100,phone,6012,Natural Grocers Arvada - Wadsworth,Arvada,CO,80003,5620,
+Natural Grocers Corporate:Aurora - Tower,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 680-2344,0,High,100,phone,6013,Natural Grocers Aurora - Tower,Aurora,CO,80013,5620,
+Natural Grocers Corporate:Austin - N. Lamar,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(512) 323-5100,0,High,97,phone,6014,Natural Grocers Austin - Lamar,Austin,TX,78751,5620,
+Natural Grocers Corporate:Bend - 97,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(541) 617-0200,0,High,100,phone,6119,Natural Grocers Bend - 97,Bend,OR,97701,5620,
+Natural Grocers Corporate:Billings - 24th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(406) 652-1500,0,High,100,phone,6016,Natural Grocers Billings - 24th,Billings,MT,59102,5620,
+Natural Grocers Corporate:Bountiful - W. 500 So.,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,92,,6120,Natural Grocers Bountiful - 500,Bountiful,UT,84010,5620,
+Natural Grocers Corporate:Casper - 2nd,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(307) 265-0909,0,High,100,phone,6121,Natural Grocers Casper - 2nd,Casper,WY,82609,5620,
+Natural Grocers Corporate:Castle Rock  -Trail Boss,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6020,Natural Grocers Castle Rock - Trail Boss,Castle Rock,CO,80104,5620,
+Natural Grocers Corporate:Cedar Falls - University,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(319) 553-5510,0,High,100,phone,6021,Natural Grocers Cedar Falls - University,Cedar Falls,IA,50613,5620,
+Natural Grocers Corporate:Cedar Park - Whitestone,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6022,Natural Grocers Cedar Park - Whitestone,Cedar Park,TX,78613,5620,
+Natural Grocers Corporate:Cedar Rapids - Blairs Ferry,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(319) 382-7993,0,High,100,phone,6023,Natural Grocers Cedar Rapids - Blairs Ferry,Cedar Rapids,IA,52402,5620,
+Natural Grocers Corporate:Centennial - E. Arapahoe,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 790-0488,0,High,82,phone,8490,Natural Grocers Englewood - Arapahoe,Centennial,CO,80112,5620,
+Natural Grocers Corporate:Chandler - Ray,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(480) 893-8000,0,High,100,phone,6025,Natural Grocers Chandler - Ray,Chandler,AZ,85226,5620,
+Natural Grocers Corporate:Cheyenne - Frontier Mall,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(307) 635-3800,293.75,High,90,phone,6122,Natural Grocers Cheyenne,Cheyenne,WY,82009,5620,
+Natural Grocers Corporate:Clive - Hickman,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(515) 278-8000,0,High,100,phone,6026,Natural Grocers Clive - Hickman,Clive,IA,50325,5620,
+Natural Grocers Corporate:Coeur d'Alene - Neider,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(208) 665-4590,255.75,High,100,phone,6124,Natural Grocers Coeur d'Alene - Neider,Coeur d'Alene,ID,83815,5620,
+Natural Grocers Corporate:Colorado Springs - Academy (619),Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(719) 577-2500,107.85,High,100,phone,6029,Natural Grocers Colorado Springs - Academy,Colorado Springs,CO,80920,5620,
+Natural Grocers Corporate:Columbia - Stadium,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6031,Natural Grocers Columbia - Stadium,Columbia,MO,65203,5620,
+Natural Grocers Corporate:Conifer - Main,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 816-5000,0,High,100,phone,6032,Natural Grocers Conifer - Main,Conifer,CO,80433,5620,
+Natural Grocers Corporate:Coos Bay - Broadway,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(541) 266-9473,109.9,High,100,phone,6033,Natural Grocers Coos Bay - Broadway,Coos Bay,OR,97420,5620,
+Natural Grocers Corporate:Coppell - Denton Tap,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(972) 393-7900,0,High,100,phone,6034,Natural Grocers Coppell - Denton Tap,Coppell,TX,75019,5620,
+Natural Grocers Corporate:Corpus Christi - Staples,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,325.6,High,100,,6035,Natural Grocers Corpus Christi - Staples,Corpus Christi,TX,78411,5620,
+Natural Grocers Corporate:Dallas - Preston,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,149.95,High,100,,6036,Natural Grocers Dallas - Preston,Dallas,TX,75230,5620,
+Natural Grocers Corporate:Davenport - 53rd,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,114,High,100,,6037,Natural Grocers Davenport - 53rd,Davenport,IA,52807,5620,
+Natural Grocers Corporate:Denver - Alameda,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 399-0164,0,High,97,phone,6043,Natural Grocers Denver - Alemeda,Denver,CO,80246,5620,
+Natural Grocers Corporate:Denver - Colorado,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 756-8400,0,High,100,phone,6028,Natural Grocers Denver - Colorado,Denver,CO,80222,5620,
+Natural Grocers Corporate:Denver - Green Valley,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(720) 842-7089,0,High,92,phone,8185,Natural Grocers Denver - Green Valley Ranch,Denver,CO,80249,5620,
+Natural Grocers Corporate:Denver - Tennyson,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 455-6000,0,High,100,phone,6107,Natural Grocers Denver - Tennyson,Denver,CO,80212,5620,
+Natural Grocers Corporate:Denver - Wadsworth,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,114,High,100,,6071,Natural Grocers Denver - Wadsworth,Denver,CO,80227,5620,
+Natural Grocers Corporate:Denver - Washington,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 832-3000,0,High,100,phone,6027,Natural Grocers Denver - Washington,Denver,CO,80203,5620,
+Natural Grocers Corporate:Dubuque - Asbury,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(563) 552-7152,0,High,100,phone,6041,Natural Grocers Dubuque - Asbury,Dubuque,IA,52002,5620,
+Natural Grocers Corporate:Edmond - Boulevard,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(405) 341-4700,0,High,100,phone,6044,Natural Grocers Edmond - Boulevard,Edmond,OK,73013,5620,
+Natural Grocers Corporate:Edmond - Western,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(405) 330-1405,0,High,100,phone,8416,Natural Grocers Edmond - Western,Edmond,OK,73013,5620,
+Natural Grocers Corporate:Eugene - Coburg,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(541) 345-3300,1060.45,High,100,phone,6126,Natural Grocers Eugene - Coburg,Eugene,OR,97401,5620,
+Natural Grocers Corporate:Evergreen - Bergen,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6045,Natural Grocers Evergreen - Bergen,Evergreen,CO,80439,5620,
+Natural Grocers Corporate:Fargo - 13th Ave.,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,93,,6127,Natural Grocers Fargo - 13th,Fargo,ND,58103,5620,
+Natural Grocers Corporate:Farmington - 20th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(505) 324-6400,0,High,100,phone,6128,Natural Grocers Farmington - 20th,Farmington,NM,87401,5620,
+Natural Grocers Corporate:Fayetteville - College,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6046,Natural Grocers Fayetteville - College,Fayetteville,AR,72703,5620,
+Natural Grocers Corporate:Flagstaff - Clay,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(928) 779-4172,0,High,100,phone,6047,Natural Grocers Flagstaff - Clay,Flagstaff,AZ,86001,5620,
+Natural Grocers Corporate:Fort Collins - College,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(970) 266-9919,0,High,100,phone,6048,Natural Grocers Fort Collins - College,Fort Collins,CO,80525,5620,
+Natural Grocers Corporate:Fort Worth - 7th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(817) 334-0801,0,High,100,phone,6049,Natural Grocers Fort Worth - 7th,Fort Worth,TX,76107,5620,
+Natural Grocers Corporate:Fredericksburg - Main,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(830) 733-9139,111.95,High,100,phone,6050,Natural Grocers Fredericksburg - Main,Fredericksburg,TX,78624,5620,
+Natural Grocers Corporate:Frisco - Ten Mile,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(970) 262-1100,297.85,High,100,phone,6051,Natural Grocers Frisco - Ten Mile,Frisco,CO,80443,5620,
+Natural Grocers Corporate:Georgetown - University Ave.,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(737) 808-7052,0,High,95,phone,6052,Natural Grocers Georgetown - University,Georgetown,TX,78628,5620,
+Natural Grocers Corporate:Gilbert - Baseline,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(480) 635-9000,0,High,100,phone,6053,Natural Grocers Gilbert - Baseline,Gilbert,AZ,85234,5620,
+Natural Grocers Corporate:Gilbert - E. Williams,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(480) 917-9000,0,High,97,phone,6054,Natural Grocers Gilbert - Williams,Gilbert,AZ,85295,5620,
+Natural Grocers Corporate:Glenwood Springs - Meadows,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(970) 945-7000,342.55,High,100,phone,6055,Natural Grocers Glenwood Springs - Meadows,Glenwood Springs,CO,81601,5620,
+Natural Grocers Corporate:Golden - Ford,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 279-2500,114,High,100,phone,6056,Natural Grocers Golden - Ford,Golden,CO,80401,5620,
+Natural Grocers Corporate:Grand Forks - 32nd,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(701) 775-8333,361.55,High,100,phone,6129,Natural Grocers Grand Forks - 32nd,Grand Forks,ND,58201,5620,
+Natural Grocers Corporate:Grand Junction - 6,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(970) 263-7750,0,High,90,phone,6057,Natural Grocers Grand Junction - 6 & 50,Grand Junction,CO,81505,5620,
+Natural Grocers Corporate:Gresham - Burnside,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(503) 465-0130,291.7,High,100,phone,6130,Natural Grocers Gresham - Burnside,Gresham,OR,97030,5620,
+Natural Grocers Corporate:Hailey - N. Main,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(208) 788-5094,221.85,High,96,phone,6060,Natural Grocers Hailey - Main,Hailey,ID,83333,5620,
+Natural Grocers Corporate:Happy Valley - 82nd,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(503) 659-0100,0,High,100,phone,6123,Natural Grocers Happy Valley - 82nd,Happy Valley,OR,97086,5620,
+Natural Grocers Corporate:Helena - Montana,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(406) 442-1000,287.6,High,100,phone,6131,Natural Grocers Helena - Montana,Helena,MT,59601,5620,
+Natural Grocers Corporate:Henderson - Sunset,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(702) 547-1837,0,High,100,phone,6132,Natural Grocers Henderson - Sunset,Henderson,NV,89014,5620,
+Natural Grocers Corporate:Hurst - Grapevine,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,98,,6063,Natural Grocers Hurst - Grapvine,Hurst,TX,76054,5620,
+Natural Grocers Corporate:Idaho Falls - 17th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(208) 523-6100,0,High,100,phone,6133,Natural Grocers Idaho Falls - 17th,Idaho Falls,ID,83404,5620,
+Natural Grocers Corporate:Independence - 48th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(816) 478-1990,0,High,100,phone,6064,Natural Grocers Independence - 48th,Independence,MO,64055,5620,
+Natural Grocers Corporate:Iowa City - Gilbert,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6065,Natural Grocers Iowa City - Gilbert,Iowa City,IA,52240,5620,
+Natural Grocers Corporate:Jefferson City - Missouri Blvd Ste 129,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,90,,8758,Natural Grocers Jefferson City - Missouri,Jefferson City,MO,65109,5620,
+Natural Grocers Corporate:Jonesboro - Caraway,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(870) 934-1305,0,High,100,phone,6066,Natural Grocers Jonesboro - Caraway,Jonesboro,AR,72401,5620,
+Natural Grocers Corporate:Joplin - Range Line,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(417) 627-9436,0,High,86,phone,6067,Natural Grocers Joplin - Rangeline,Joplin,MO,64801,5620,
+Natural Grocers Corporate:Kalispell - 93,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(406) 755-5300,329.7,High,100,phone,6134,Natural Grocers Kalispell - 93,Kalispell,MT,59901,5620,
+Natural Grocers Corporate:Keller - Keller,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(817) 379-1900,0,High,100,phone,6068,Natural Grocers Keller - Keller,Keller,TX,76248,5620,
+Natural Grocers Corporate:Lafayette - Boulder,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 926-1600,0,High,100,phone,6070,Natural Grocers Lafayette - Boulder,Lafayette,CO,80026,5620,
+Natural Grocers Corporate:Lakewood - Alameda,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 986-5700,0,High,100,"phone,zip,city",6059,Natural Grocers Lakewood - Alameda,Lakewood,CO,80228,5620,
+Natural Grocers Corporate:Las Vegas - Simmons,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(702) 395-0642,0,High,92,phone,6137,Natural Grocers North Las Vegas - Simmons,North Las Vegas,NV,89031,5620,
+Natural Grocers Corporate:Liberty - Stewart,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(816) 335-4190,0,High,100,phone,6073,Natural Grocers Liberty - Stewart,Liberty,MO,64068,5620,
+Natural Grocers Corporate:Lincoln - 48th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(402) 489-0400,114,High,100,phone,6074,Natural Grocers Lincoln - 48th,Lincoln,NE,68504,5620,
+Natural Grocers Corporate:Little Rock - Rodney Parham,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(501) 312-8300,0,High,100,phone,6075,Natural Grocers Little Rock - Rodney Parham,Little Rock,AR,72227,5620,
+Natural Grocers Corporate:Logan - N. Main,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(435) 752-3200,0,High,96,phone,6076,Natural Grocers Logan - Main,Logan,UT,84341,5620,
+Natural Grocers Corporate:Longmont - Main,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 684-8200,0,High,100,phone,6077,Natural Grocers Longmont - Main,Longmont,CO,80501,5620,
+Natural Grocers Corporate:Longview - 281,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,162.8,High,100,,6078,Natural Grocers Longview - 281,Longview,TX,75605,5620,
+Natural Grocers Corporate:Los Alamos - Trinity,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(505) 412-4460,166.9,High,100,phone,8583,Natural Grocers Los Alamos - Trinity,Los Alamos,NM,87544,5620,
+Natural Grocers Corporate:Lubbock - Slide,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(806) 783-8990,0,High,100,phone,6079,Natural Grocers Lubbock - Slide,Lubbock,TX,79424,5620,
+Natural Grocers Corporate:Medford - Pacific,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,114,High,100,,6136,Natural Grocers Medford - Pacific,Medford,OR,97501,5620,
+Natural Grocers Corporate:Missoula - 3rd,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(406) 728-2100,128.9,High,100,phone,6082,Natural Grocers Missoula - 3rd,Missoula,MT,59804,5620,
+Natural Grocers Corporate:Montrose - Rio Grande,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,99,,6083,Natural Grocers Montrose - Rio Grand,Montrose,CO,81401,5620,
+Natural Grocers Corporate:Natural Grocers - Amarillo - Hillside,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,399.55,High,100,,8826,Natural Grocers - Amarillo Hillside,Amarillo,TX,79119,5620,
+Natural Grocers Corporate:Natural Grocers - Boise Milwaukee,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6017,Natural Grocers Boise - Milwaukee,Boise,ID,83704,5620,
+Natural Grocers Corporate:Natural Grocers - Durango Camino,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,143.8,High,100,,6042,Natural Grocers Durango - Camino,Durango,CO,81301,5620,
+Natural Grocers Corporate:Natural Grocers - General Bruce Temple,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,110.5,High,100,,6106,Natural Grocers Temple - General Bruce,Temple,TX,76504,5620,
+Natural Grocers Corporate:Natural Grocers - McCall,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,98,,8821,Natural Grocers - McCal,McCall,ID,83638,5620,
+Natural Grocers Corporate:Natural Grocers -Gunnison,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,266,High,100,,8972,Natural Grocers - Gunnison,Gunnison,CO,81230,5620,
+Natural Grocers Corporate:Natural Grocers Columbia - Bernadette,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,8701,Natural Grocers Columbia - Bernadette,Columbia,MO,65203,5620,
+Natural Grocers Corporate:Natural Grocers Dallas - Garland,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6019,Natural Grocers Dallas - Garland,Dallas,TX,75218,5620,
+Natural Grocers Corporate:Natural Grocers Denton - 110 W University,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,107.85,High,92,,6038,Natural Grocers Denton - University,Denton,TX,76201,5620,
+Natural Grocers Corporate:Natural Grocers Denver - Broadway 368,,,,,,invoicemailbox@naturalgrocers.com,,0,High,92,,6039,Natural Grocers Denver - Bradway,Denver,CO,80209,5620,
+Natural Grocers Corporate:Natural Grocers Greeley - 8th Aveneu,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,97,,8839,Natural Grocers Greeley - 8th Avenue,Greeley,CO,80631,5620,
+Natural Grocers Corporate:Natural Grocers Highlands Ranch - Jon Stiles Dr,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,8812,Natural Grocers Highlands Ranch - Jon Stiles Dr,Highlands Ranch,CO,80129,5620,
+Natural Grocers Corporate:Natural Grocers Littleton - University,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6024,Natural Grocers Littleton - University,Centennial,CO,80122,5620,
+Natural Grocers Corporate:Natural Grocers Midland - 3001,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,114,High,100,,8818,Natural Grocers Midland - 3001,Midland,TX,79705,5620,
+Natural Grocers Corporate:Natural Grocers Mission - Johnson,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6081,Natural Grocers Mission - Johnson,Mission,KS,66202,5620,
+Natural Grocers Corporate:Natural Grocers Springfield - Glenstone,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,8779,Natural Grocers Springfield - Glenstone,Springfield,MO,65804,5620,
+Natural Grocers Corporate:Natural Grocers Warr - NW Expressway,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,8940,Natural Grocers Warr - NW Expressway,Warr Acres,OK,73132,5620,
+Natural Grocers Corporate:Norman - W. Main,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,96,,6085,Natural Grocers Norman - Main,Norman,OK,73069,5620,
+Natural Grocers Corporate:Northglenn - Washington,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 280-1900,143.8,High,100,phone,6087,Natural Grocers Northglenn - Washington,Northglenn,CO,80233,5620,
+Natural Grocers Corporate:Ogden - 12th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(385) 333-7768,107.85,High,100,phone,8186,Natural Grocers Ogden - 12th,Ogden,UT,84404,5620,
+Natural Grocers Corporate:Olathe - 119th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6138,Natural Grocers Olathe - 119th,Olathe,KS,66062,5620,
+Natural Grocers Corporate:Omaha - Dodge,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6090,Natural Grocers Omaha - Dodge,Omaha,NE,68114,5620,
+Natural Grocers Corporate:Omaha - Wright,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(402) 334-1100,0,High,100,phone,6091,Natural Grocers Omaha - Wright,Omaha,NE,68130,5620,
+Natural Grocers Corporate:Overland Park - Metcalf,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(913) 385-2000,0,High,100,phone,6139,Natural Grocers Overland Park - Metcalf,Overland Park,KS,66212,5620,
+Natural Grocers Corporate:Pagosa Springs - San Juan,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(970) 459-9212,114,High,100,phone,8629,Natural Grocers Pagosa Springs - San Juan,Pagosa Springs,CO,81147,5620,
+Natural Grocers Corporate:Parker - S. Parker,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,181.8,High,97,,6092,Natural Grocers Parker - Parker,Parker,CO,80134,5620,
+Natural Grocers Corporate:Portland - Martin Luther King Jr.,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(503) 528-9884,441.65,High,100,phone,6094,Natural Grocers Portland - Martin Luther King Jr,Portland,OR,97211,5620,
+Natural Grocers Corporate:Portland - Powell,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(503) 788-1677,0,High,100,phone,6140,Natural Grocers Portland - Powell,Portland,OR,97202,5620,
+Natural Grocers Corporate:Prescott - Gail Gardener,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(928) 771-0400,0,High,99,phone,6095,Natural Grocers Prescott - Gail Gardner,Prescott,AZ,86305,5620,
+Natural Grocers Corporate:Pueblo - 29th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6096,Natural Grocers Pueblo - 29th,Pueblo,CO,81008,5620,
+Natural Grocers Corporate:Reno - Kietzke,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(775) 448-9828,0,High,100,phone,6141,Natural Grocers Reno - Kietzke,Reno,NV,89509,5620,
+Natural Grocers Corporate:Reno - Virginia ST,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,92,,8910,Natural Grocers - Virginia St,Reno,NV,89502,5620,
+Natural Grocers Corporate:Richardson - Campbell,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6097,Natural Grocers Richardson - Campbell,Richardson,TX,75080,5620,
+Natural Grocers Corporate:Rochester - Greenview,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(507) 252-8000,0,High,100,phone,6142,Natural Grocers Rochester - Greenview,Rochester,MN,55902,5620,
+Natural Grocers Corporate:Saint Joseph - Belt,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(816) 387-8333,0,High,100,phone,6148,Natural Grocers Saint Joseph - Belt,Saint Joseph,MO,64506,5620,
+Natural Grocers Corporate:Salem - Commercial,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(503) 588-1600,346.65,High,100,phone,6143,Natural Grocers Salem - Commercial,Salem,OR,97302,5620,
+Natural Grocers Corporate:Salida - F St.,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,185.9,High,94,,6099,Natural Grocers Salida - F,Salida,CO,81201,5620,
+Natural Grocers Corporate:Salt Lake City - 2100,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(801) 467-2920,0,High,100,phone,6149,Natural Grocers Salt Lake City - 2100,Salt Lake City,UT,84106,5620,
+Natural Grocers Corporate:Salt Lake City - 400,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(801) 364-2000,0,High,100,phone,6144,Natural Grocers Salt Lake City - 400,Salt Lake City,UT,84102,5620,
+Natural Grocers Corporate:San Antonio - Military,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(210) 764-1111,143.8,High,100,phone,6100,Natural Grocers San Antonio - Military,San Antonio,TX,78231,5620,
+Natural Grocers Corporate:San Antonio - N. New Braunfels Ave.,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(210) 829-5236,0,High,93,phone,6008,Natural Grocers San Antonio - New Braunfels,San Antonio,TX,78209,5620,
+Natural Grocers Corporate:Santa Fe - S. St. Francis,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(505) 474-0111,407.75,High,97,phone,8760,Natural Grocers Santa Fe - St Francis,Santa Fe,NM,87505,5620,
+Natural Grocers Corporate:Scottsdale - North Scottsdale,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,92,,6101,Natural Grocers Scottsdale - Scottsdale,Scottsdale,AZ,85254,5620,
+Natural Grocers Corporate:Sedona - State Route 89A,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(928) 282-1961,0,High,90,phone,6102,Natural Grocers Sedona - 89A,Sedona,AZ,86336,5620,
+Natural Grocers Corporate:Shawnee - Shawnee Mission,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(913) 631-0844,0,High,90,phone,6146,Natural Grocers Mission - Shawnee Mission,Mission,KS,66205,5620,
+Natural Grocers Corporate:South Jordan - S. Redwood,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,97,,6104,Natural Grocers South Jordan - Redwood,South Jordan,UT,84095,5620,
+Natural Grocers Corporate:Spokane - 29th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(509) 503-1700,171,High,100,phone,8176,Natural Grocers Spokane - 29th,Spokane,WA,99223,5620,
+Natural Grocers Corporate:Spokane - Division,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(509) 489-9900,0,High,100,phone,6147,Natural Grocers Spokane - Division,Spokane,WA,99207,5620,
+Natural Grocers Corporate:Tigard - Pacific,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(971) 249-8885,0,High,100,phone,8756,Natural Grocers Tigard - Pacific,Tigard,OR,97223,5620,
+Natural Grocers Corporate:Topeka - 21st,Natural Grocers,3633 NW Brickyard Rd,Topeka,KS,66618,invoicemailbox@naturalgrocers.com,(785) 228-9100,107.85,High,100,"phone,city",6109,Natural Grocers Topeka - 21st,Topeka,KS,66604,5620,
+Natural Grocers Corporate:Tucson - 3016 E. Broadway,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,90,,6110,Natural Grocers Tucson - Broadway,Tucson,AZ,85716,5620,
+Natural Grocers Corporate:Tucson - 7220 E. Broadway,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(520) 885-600085710,0,High,90,,6111,Natural Grocers Tucson - Broadway,Tucson,AZ,85710,5620,
+Natural Grocers Corporate:Tucson - Oracle,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6112,Natural Grocers Tucson - Oracle,Tucson,AZ,85704,5620,
+Natural Grocers Corporate:Tulsa - Harvard,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(918) 749-0271,0,High,100,phone,6114,Natural Grocers Tulsa - Harvard,Tulsa,OK,74135,5620,
+Natural Grocers Corporate:Tyler - Broadway,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(903) 561-1800,0,High,100,phone,6115,Natural Grocers Tyler - Broadway,Tyler,TX,75703,5620,
+Natural Grocers Corporate:Vancouver - 192nd,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(360) 450-2770,0,High,90,phone,8799,Natural Grocers Vancouver - 192nd Avenue,Vancouver,WA,98683,5620,
+Natural Grocers Corporate:Vancouver - 5th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,High,100,,6150,Natural Grocers Vancouver - 5th,Vancouver,WA,98665,5620,
+Natural Grocers Corporate:Warrenton - US-101,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(503) 861-5646,0,High,95,phone,6086,Natural Grocers Warrenton - 101,Warrenton,OR,97146,5620,
+Natural Grocers Corporate:Washington - Telegraph,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(435) 986-1100,0,High,100,phone,6098,Natural Grocers Washington - Telegraph,Washington,UT,84780,5620,
+Natural Grocers Corporate:Wheat Ridge - Kipling,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 420-2600,0,High,100,phone,6117,Natural Grocers Wheat Ridge - Kipling,Wheat Ridge,CO,80033,5620,
+Natural Grocers Corporate:Wichita - 13th,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(316) 721-6100,0,High,100,phone,6152,Natural Grocers Wichita - 13th,Wichita,KS,67212,5620,
+Natural Grocers Corporate:Wichita Falls - Lawrence,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(940) 689-0305,0,High,100,phone,8417,Natural Grocers Wichita Falls - Lawrence,Wichita Falls,TX,76308,5620,
+Natural Grocers Corporate:Woodland Park - Paradise Lodge,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(719) 247-6334,0,High,100,phone,8469,Natural Grocers Woodland Park - Paradise Lodge,Woodland Park,CO,80863,5620,
+Natures Gift,,4306 N. Saginaw,Midland,MI,48640,"karenl@naturesgiftorganicmarket.com, jeff@blueskyrepresentation.com, garwoodd@aol.com",(989) 835-4438,0,High,90,"phone,zip,city",8188,Nature's Gift Organic Market,Midland,MI,48640,,
+New Deal Distillery,Chain (deleted),"900 SE Salmon St,",Portland,OR,97214,"susan@newdealdistillery.com, melissa@newdealdistillery.com, asia@newdealdistillery.com",,0,High,100,"zip,email,city",6155,New Deal Distillery,Portland,OR,97214,,
+New Seasons Corporate,New Seasons,"1300 SE Stark Street, Suite 401  Portland",,,,ap@newseasonsmarket.com,,177.15,High,100,parent account,5623,New Seasons,,,,,
+New Seasons Corporate:- Milwaukie,,"1300 SE Stark Street, Suite 401  Portland",,,,ap@newseasonsmarket.com,,206.95,High,100,,8887,New Seasons - Milwaukie,Milwaukie,OR,97222,5623,
+New Seasons Corporate:Beaverton - Barrows,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 597-6777,0,High,100,phone,6161,New Seasons Beaverton - Barrows,Beaverton,OR,97007,5623,
+New Seasons Corporate:Beaverton - Cedar Hills,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 641-4181,0,High,100,"phone,email",6160,New Seasons Beaverton - Cedar Hills,Beaverton,OR,97005,5623,
+New Seasons Corporate:Happy Valley - Happy Valley Town Center,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 558-9214,185.9,High,99,phone,6166,New Seasons Happy Valley - Happy Vally Town Center,Happy Valley,OR,97086,5623,
+New Seasons Corporate:Hillsboro - 61st,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 648-6968,0,High,100,phone,6170,New Seasons Hillsboro - 61st,Hillsboro,OR,97124,5623,
+New Seasons Corporate:Lake Oswego - Monroe,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 496-1155,114,High,100,phone,6168,New Seasons Lake Oswego - Monroe,Lake Oswego,OR,97035,5623,
+New Seasons Corporate:New Seasons - Tanasbourne Evergreen,,"1300 SE Stark Street, Suite 401  Portland",,,,ap@newseasonsmarket.com,,0,High,100,,8923,New Seasons - Tanasbourne Evergreen,Hillsboro,OR,,5623,
+New Seasons Corporate:Palisades - Lake Oswego,,1377 McVey Ave,Lake Oswego,OR,97034,ap@newseasonsmarket.com,,133,High,90,"zip,city",8765,Palisades,Lake Oswego,OR,97034,5623,
+New Seasons Corporate:Portland - 33rd,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 288-3838,152,High,100,"phone,city",6162,New Seasons Portland - 33rd,Portland,OR,97211,5623,
+New Seasons Corporate:Portland - Beaverton Hillsdale,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 641-4181,0,High,100,city,6171,New Seasons Portland - Beaverton Hillsdale,Portland,OR,97225,5623,
+New Seasons Corporate:Portland - Broadway,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 282-2080,0,High,100,"phone,city",6165,New Seasons Portland - Broadway,Portland,OR,97232,5623,
+New Seasons Corporate:Portland - Division,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 445-2888,166.9,High,100,"phone,city",6158,New Seasons Portland - Division,Portland,OR,97202,5623,
+New Seasons Corporate:Portland - Hawthorne,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,503) 236-4800,0,High,100,"phone,city",6167,New Seasons Portland - Hawthorne,Portland,OR,97214,5623,
+New Seasons Corporate:Portland - Interstate,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 467-4777,0,High,100,"phone,city",6159,New Seasons Portland - Interstate,Portland,OR,97217,5623,
+New Seasons Corporate:Portland - Lombard,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 289-0834,0,High,100,"phone,city",6174,New Seasons Portland - Lombard,Portland,OR,97203,5623,
+New Seasons Corporate:Portland - Raleigh,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 224-7522,0,High,100,"phone,city",6173,New Seasons Portland - Raleigh,Portland,OR,97210,5623,
+New Seasons Corporate:Portland - Tacoma,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 230-4949,0,High,100,city,6172,New Seasons Portland - Tacoma,Portland,OR,97202,5623,
+New Seasons Corporate:Portland - Williams,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 528-2888,133,High,100,"phone,zip,city",6175,New Seasons Portland - Williams,Portland,OR,97227,5623,
+New Seasons Corporate:Portland - Woodstock,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 771-9663,0,High,100,"phone,city",6176,New Seasons Portland - Woodstock,Portland,OR,97206,5623,
+New Seasons Corporate:Tualatin - Nyberg,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(503) 692-3535,0,High,100,phone,6169,New Seasons Tualatin - Nyberg,Tualatin,OR,97062,5623,
+New Seasons Corporate:Vancouver - 164th,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(360) 760-5005,0,High,100,phone,6164,New Seasons Vancouver - 164th,Vancouver,WA,98683,5623,
+Newport Avenue Market,Independent - Non-Grocery,1121 NW Newport Ave.,Bend,OR,97701,grocery@newportavemarket.com,(541) 382-3940,0,High,100,"phone,zip,email,city",8300,Newport Avenue Market,Bend,OR,97701,,
+North Coast Co-op (Arcata),,811 I Street,Arcata,CA,95521,markthompson@northcoast.coop,(707) 822-5947,0,High,71,"phone,zip,city",8840,North Coast Coop,Arcata,CA,95521,,
+olympia food coop - East,,3111 Pacific Ave SE,Olympia,WA,98501,accountspayable@olympiafood.coop,,0,High,90,,5624,Olympia Food,,,,,
+Other Avenues Grocery Cooperative,,3930 Judah St,San Francisco,CA,94122,reid@otheravenues.coop,(415) 661-7475,0,High,100,"phone,zip,email,city",5681,Other Avenues Grocery Cooperative,San Francisco,CA,94122,,
+OWL Oncology Research,Independent - Non-Grocery,3245 Sagewater Court,Fort Collins,CO,80528,belliott@owloncology.com,,0,High,100,"zip,email,city",8850,OWL Oncology Research,Fort Collins,CO,80528,,
+Pacific Northwest Shop,,2702 North Proctor,Tacoma,WA,98407,pnw@pacificnorthwestshop.com,(253) 752-2242,0,High,100,"phone,zip,email,city",8635,Pacific Northwest Shop,Tacoma,WA,98407,,
+Perelandra Natural Foods,,175 Remsen St,Brooklyn,NY,11201,"dan@perelandranatural.com, bookkeeper@perelandranatural.com",(718) 855-6068,0,High,85,"phone,zip,city",5682,Perelandra Natural Food Center,Brooklyn,NY,11201,,
+Powells Books,Independent - Non-Grocery,"Powell's Corporate Building
+PO Box 3989",Portland,OR,97208,"apinvoices@powells.com, giftorders@powells.com",(503)228-4651 x-5846,683.05,High,90,city,8163,Powells Books Distribution Center,Portland,OR,97210,,
+"Prometheus Real Estate Group, Inc.:Prometheus Real Estate Group",,"Atn:  Savannah VanVoorhis
+1900 South Norfolk St.- Suite 159",San Mateo,CA,94403,SVanVoorhis@prometheusreg.com,,0,High,100,email,8153,Prometheus Real Estate Group,Santa Clara,CA,95051,,
+PromoShop,,5420 McConnell Avenue,Los Angeles,CA,90066,BNorthcutt@promoshopla.com,(310) 720-9201,0,High,100,"phone,zip,email,city",8747,PromoShop,Los Angeles,CA,90066,,
+Rainbow Grocery Cooperative,,1745 Folsom St,San Fransico,CA,94103-3711,xmoran@rainbow.coop,,0,High,90,zip,7505,Rainbow Grocery,San Francisco,CA,94103,,
+Red Dog Farm Stand,,406 Center Rd.,Chimacum,WA,98325,farmstandreddog@gmail.com,,0,High,90,,5676,Farm Stand,,,,,
+Red Mitten,,,,,,theredmitten@gmail.com,,0,High,100,email,8928,red mitten,,,,,
+Renaissance Specialty Foods,Distributor,260 South Maple Ave.,South San Francisco,CA,94080,eunice@renaissancespecialtyfoods.com,(650) 873-5400,0,High,100,"phone,zip,email",8664,Renaissance Specialty Foods,"South San Francisco,",CA,94080,,
+Ryeka Sport Canada,Chain (deleted),2355 Royal Windsor Drive Unit#12,Mississauga,ON,L5J4S8,"bbenzoni@ryekasport.com, tpong@ryekasport.com",,0,High,90,city,7524,Ryeka Sport,Mississauga,Ontario,,,
+Sage Mountain Foods,,11734 US-2,Leavenworth,WA,"98826""",,,0,High,90,"zip,city",8291,Sage Mountain Natural Foods,Leavenworth,WA,98826,,
+Scott Edwards Architecture,Independent - Non-Grocery,"2525 E Burnside St
+Portland, OR 97214",,,,gstoneback@seallp.com,,0,High,100,email,8717,Scott Edwards Architecture,Portland,OR,97214,,
+Skamania Lodge,Chain (deleted),1131 SW Skamania Lodge Way,Stevenson,WA,98648,sholwegner@skamania.com,(509) 314-4177,0,High,100,"phone,zip,email,city",8167,Skamania Lodge,Stevenson,WA,98648,,
+Sol Foods Supermarket & Hardware,,Post Office Box 840 - 995  Zion Park Boulevard,Springdale,UT,84767,solfoods@msn.com,(435) 772-3100,0,High,90,"phone,zip,city",8619,Sol Foods Supermarket,Springdale,UT,84767,,
+Spruce Collective,Independent - Non-Grocery,726 Cherry St.,Sumas,WA,98295,,(604) 855-0506,0,High,100,"phone,zip,city",8491,Spruce Collective,Sumas,WA,98295,,
+Spruce Supply Co.,,520 Columbia Drive,Lyle,WA,98635,libby@sprucesupplyco.com,(360) 921-5172,0,High,100,"zip,city",8574,Spruce Supply Co,Lyle,WA,98635,,
+Star Grocery,,3068 Claremont Ave.,Berkeley,CA,94705,stargrocery@sbcglobal.net,(510) 652-2490,0,High,100,"phone,zip,email,city",8215,Star Grocery,Berkeley,CA,94705,,
+Star Store,Independent - Non-Grocery,201 1st Street,Langley,WA,98260,grocery@whidbey.com,(360) 2221-5223,0,High,100,"zip,email,city",7553,STAR STORE,Langley,WA,98260,,
+Stockbox First Hill Grocery,,901 James St.,Seattle,WA,98104,goodfood@stockboxgrocers.com,(206) 829-9940,0,High,100,"phone,zip,email,city",7558,Stockbox First Hill Grocery,Seattle,WA,98104,,
+Sundance Natural Foods,,748 E. 24th Ave.,Eugene,OR,97405,troy@sundancenaturalfoods.com,(541) 343-9142,0,High,100,"phone,zip,email,city",7568,Sundance Natural Foods,Eugene,OR,97405,,
+Sunset Hill Green Market,Independent - Non-Grocery,6405 32nd Ave. NW,Seattle,WA,98107,suham54@gmail.com,(206) 453-3268,0,High,90,"phone,zip,city",7581,The Green Market,Seattle,WA,98107,,
+Taproot Theater,,"212 N 85th St,",Seattle,WA,98103,RyLeighT@taproottheatre.org,,0,High,100,"zip,email,city",8853,Taproot Theater,Seattle,WA,98103,,
+Test,,Test,,,,,,0,High,90,,8971,Test Customer,Portland,OR,,,
+The Field Scout,,601 SE Hawthorne Blvd,Portland,OR,97214,"kelsie@thefieldscout.com, kimf@thefieldscout.com",9046693638,0,High,100,"zip,city",8429,Field Scout,Portland,OR,97214,,
+The Food Coop - Port Townsend,,414 Kearney St,Port Townsend,WA,98368-8302,kristina@foodcoop.coop,,0,High,100,"zip,city",8832,The Food Coop- Port Townsend,Port Townsend,WA,98368,,
+The Real Food Co.,Independent - Non-Grocery,2140 Polk St.,San Francisco,CA,94109,ryan@realfoodco.com,(415) 673-7420,0,High,100,"phone,zip,city",8211,Real Food Company,San Francisco,CA,94109,,
+The Silver City Food Co-op,Independent - Non-Grocery,520 N. Bullard St.,Silver City,NM,88061,doug@silvercityfoodcoop.coop,(575) 388-2343,0,High,100,"phone,zip,email,city",8213,The Silver City Food Co-op,Silver City,NM,88061,,
+Tillamook,,4185 HWY 101 N,Tillamook,OR,97141,"ABurk@tillamook.com, JLi@tillamook.com",(971) 339-9566,114,High,90,"zip,city",7589,Tillamook Creamery,Tillamook,OR,97141,,
+Timberline Lodge,Chain (deleted),27500 E Timberline Rd,Government Camp,OR,97028,"lcanham@timberlinelodge.com, retailinvoices@timberlinelodge.com",,0,High,100,email,7590,Timberline Lodge,Portland,OR,97218,,
+UNFI,Chain (deleted),"1 Albion Rd
+Ste 101",Lincoln,RI,02865,UNFIAPInvoices@unfi.com,,0,High,100,"zip,email,city",5652,UNFI,Lincoln,RI,02865,,
+UNFI:Aurora - 40th,Distributor,"1 Albion Rd
+Ste 101",Lincoln,RI,02865,UNFIAPInvoices@unfi.com,(303) 360-8459,0,High,100,phone,8193,UNFI Aurora - 40th,Aurora,CO,80011,5652,
+UNFI:Gilroy - Cameron,,"1 Albion Rd
+Ste 101",Lincoln,RI,02865,UNFIAPInvoices@unfi.com,,0,High,100,,8194,UNFI Gilroy - Cameron,Gilroy,CA,95020,5652,
+UNFI:Rocklin - Sunset,Distributor,"1 Albion Rd
+Ste 101",Lincoln,RI,02865,UNFIAPInvoices@unfi.com,(916) 625-4100,0,High,90,phone,8172,UNFI Rocklin,Rocklin,CA,95765,5652,
+Vida pour Tea,,412 State St.,Greensboro,NC,27405,vidapourtea@gmail.com,(336) 609-4207,0,High,100,"phone,zip,email,city",8501,Vida pour Tea,Greensboro,NC,27405,,
+Village Market,,"770 Mays Blvd., Suite 2",Incline Village,NV,89451,villagemkt@gmail.com,(775) 831-5025,0,High,92,,7619,village mart,Seattle,WA,98112,,
+Whole Foods Market,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,,,83.58,High,100,parent account,5643,Whole Foods,,,,,
+Whole Foods Market:- Coddingtown,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,90,,7871,Whole Foods Market Coddingtown,Santa Rosa,CA,95401,5643,
+Whole Foods Market:- Folsom Palladio,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,100,,8197,Whole Foods Folsom - Palladio,Folsom,CA,95630,5643,
+Whole Foods Market:- Gilman Street,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,100,,7782,Whole Foods Gilman Street,Berkeley,CA,94710,5643,
+Whole Foods Market:- Monterey,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,90,,7928,Whole Foods Montgomery,Montgomery,AL,36117,5643,
+Whole Foods Market:- Mt Diablo,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,90,,8484,Whole Foods Lafayette - Mt Diablo,Lafayette,CA,94549,5643,
+Whole Foods Market:- Palo Alto,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,90,,7886,Whole Foods Market Palo Alto,Palo Alto,CA,94301,5643,
+Whole Foods Market:- Redwood City,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,90,,7889,Whole Foods Market Redwood City,Redwood City,CA,94062,5643,
+Whole Foods Market:- Roseville,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,90,,7891,Whole Foods Market Roseville,Roseville,CA,95678,5643,
+Whole Foods Market:- San Ramon,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,100,,8886,Whole Foods - San Ramon,San Ramon,CA,945832340,5643,
+Whole Foods Market:- Santa Cruz,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,90,,7898,Whole Foods Market Santa Cruz,Santa Cruz,CA,95062,5643,
+Whole Foods Market:- Sebastopol,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,100,,8884,Whole Foods Sebastopol,Sebastopol,CA,954723420,5643,
+Whole Foods Market:- South Lake Tahoe,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,90,,8225,Whole Foods South Lake Tahoe - Lake Tahoe,South Lake Tahoe,CA,96150,5643,
+Whole Foods Market:- Sunnyvale Mickinley,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,High,98,,8482,Whole Foods Sunnyvale - McKinley,Sunnyvale,CA,94086,5643,
+Whole Foods Market:Basalt - Reed,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(970) 927-1500,0,High,100,phone,8218,Whole Foods Basalt - Reed,Basalt,CO,81621,5643,
+Whole Foods Market:Bellevue - 116th,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",512-477-4455,0,High,90,,7662,Whole Foods Bellevue,Bellevue,WA,98004,5643,
+Whole Foods Market:Bellingham - Lakeway,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",512-477-4455,0,High,100,,7664,Whole Foods Bellingham Lakeway,Bellingham,WA,98229,5643,
+Whole Foods Market:Bend - 20,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,"Product.AP@wholefoods.com, APPortalSupport@wholefoods.com",512-477-4455,0,High,91,,7666,Whole Foods Bend,Bend,OR,97701,5643,
+Whole Foods Market:Boise - Broadway,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,512-477-4455,0,High,90,,7673,Whole Foods Boise,Boise,ID,83702,5643,
+Whole Foods Market:Boulder - Baseline,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,512-477-4455,0,High,90,,7655,Whole Foods Baseline,Boulder,CO,80305,5643,
+Whole Foods Market:Boulder - Pearl,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(303) 545-6611,0,High,81,phone,7968,Whole Foods Pearl St. Denver,Boulder,CO,80301,5643,
+Whole Foods Market:Colorado Springs - Academy,Whole Foods,550 Bowie Street,Austin,TX,78703-4644,orders@treehouseoriginals.com,(719) 531-9999,0,High,100,phone,8221,Whole Foods Colorado Springs - Academy,Colorado Springs,CO,80920,5643,
+Whole Foods Market:Denver - Washington,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,"orders@treehouseoriginals.com, Joby.Winch@wholefoods.com",(303) 733-6201,0,High,80,phone,8084,Whole Foods Washington Park,Denver,CO,80210,5643,
+Whole Foods Market:El Paso - Pitt,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(915) 236-1420,0,High,78,phone,7941,Whole Foods North Mesa / El Paso,El Paso,TX,79912,5643,
+Whole Foods Market:Eugene - Broadway,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,Product.AP@wholefoods.com,(541) 434-8820,0,High,90,phone,7755,Whole Foods Eugene,Eugene,OR,97401,5643,
+Whole Foods Market:Fort Collins - College,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,512-477-4455,0,High,90,,7632,Whole Foods Fort Collins -,Fort Collins,CO,80525,5643,
+Whole Foods Market:Frisco - Lusher,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,,(970) 668-9400,0,High,90,phone,7775,Whole Foods Frisco,Frisco,CO,80443,5643,
+Whole Foods Market:Glendale - Colorado,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(303) 691-0101,0,High,79,phone,7722,Whole Foods Colorado Blvd,Glendale,CO,80246,5643,
+Whole Foods Market:Golden - Colfax,Whole Foods,550 Bowie St,Austin,TX,78703-4644,orders@treehouseoriginals.com,(303) 277-1339,0,High,90,phone,7720,Whole Foods Colfax,Golden,CO,80401,5643,
+Whole Foods Market:Highlands Ranch - Colorado,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,"Aaron.strand@wholefoods.com, orders@treehouseoriginals.com",512-477-4455,0,High,90,,7801,Whole Foods Highlands Ranch,Highlands Ranch,CO,80126,5643,
+Whole Foods Market:Kansas City - 51st,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(816) 708-3700,0,High,90,phone,7824,Whole Foods Kansas City,Kansas City,MO,64112,5643,
+Whole Foods Market:Lake Oswego - State,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(503) 782-4672,0,High,90,phone,7842,Whole Foods Lake Oswego,Lake Oswego,OR,97034,5643,
+Whole Foods Market:Lakewood - Wadsworth,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,512-477-4455,0,High,90,,7843,Whole Foods Lakewood,Dallas,TX,75243,5643,
+Whole Foods Market:Longmont - Hover,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,,(720) 438-2550,0,High,90,phone,7855,Whole Foods Longmont,Longmont,CO,80501,5643,
+Whole Foods Market:Lynwood - 196th,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,Product.AP@wholefoods.com,(425) 775-1320,0,High,90,phone,7858,Whole Foods Lynwood,Lynnwood,WA,98036,5643,
+Whole Foods Market:Overland Park - 119th,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(913) 663-2951,0,High,90,phone,7954,Whole Foods Overland Park,Overland Park,KS,66209,5643,
+Whole Foods Market:Park City - Landmark,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(435) 575-0200,0,High,100,phone,8433,Whole Foods Park City - Landmark,Park City,UT,84098,5643,
+Whole Foods Market:Park City - Redstone Center,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,512-477-4455,0,High,90,,7962,Whole Foods Park City,Park City,UT,84098,5643,
+Whole Foods Market:Portland - Freemont,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(503) 288-3414,0,High,90,phone,7772,Whole Foods Freemont,Portland,OR,97212,5643,
+Whole Foods Market:Redmond - Redmond,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,512-477-4455,0,High,90,,7990,Whole Foods Redmond,Redmond,WA,98052,5643,
+Whole Foods Market:Salt Lake City - Highland,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(801) 733-9455,0,High,77,phone,7798,Whole Foods Highland Drive,Cottonwood Heights,UT,84121,5643,
+Whole Foods Market:Salt Lake City - Wilmington,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(801) 359-7913,0,High,90,,8111,Whole Foods Wilmington,Wilmington,NC,28403,5643,
+Whole Foods Market:Santa Fe - Cerrillos,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(505) 992-1700,0,High,100,phone,8224,Whole Foods Santa Fe - Cerrillos,Santa Fe,NM,87505,5643,
+Whole Foods Market:Seattle - 15th,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,,(206) 352-5440,0,High,78,phone,8015,Whole Foods Seattle Interbay,Seattle,WA,98119,5643,
+Whole Foods Market:Seattle - Fauntleroy,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(206) 338-5060,0,High,100,phone,8154,Whole Foods: Seattle - Fauntleroy,Seattle,WA,98116,5643,
+Whole Foods Market:Superior - Marshall,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,"orders@treehouseoriginals.com, John.figueroa@wholefoods.com",(720) 274-1415,0,High,90,phone,8049,Whole Foods Superior,Superior,CO,80027,5643,
+Whole Foods Market:Tanasbourne - NW Cornell,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,Product.AP@wholefoods.com,(503) 645-9200,0,High,90,phone,8055,Whole Foods Tanasbourne,Hillsboro,OR,97124,5643,
+Whole Foods Market:Tigard - Bridgeport,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(503) 639-6500,121.02,High,100,phone,8485,Whole Foods Tigard - Bridgeport,Tigard,OR,97224,5643,
+Whole Foods Market:Tigard - Greenway,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,971-371-7000,121.02,High,90,phone,7791,Whole Foods Greenway,Tigard,OR,97223,5643,
+Whole Foods Market:Union Station Denver,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,512-477-4455,0,High,90,,8068,Whole Foods Union Station,Denver,CO,80202,5643,
+Whole Foods Market:University Place - Chambers Bay Bridgeport,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(253) 534-4500,0,High,90,phone,7698,Whole Foods Chambers Bay,University Place,WA,98466,5643,
+Whole Foods Market:Westminster - Main,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(303) 439-7000,0,High,100,phone,8226,Whole Foods Westminster - Main,Westminster,CO,80031,5643,
+Whole Foods Market:Whole Foods - Kirkland,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,342,High,100,,7833,Whole Foods Kirkland,Kirkland,WA,98034,5643,
+Whole Foods Market:Whole Foods - Westlake,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,266,High,100,,8101,Whole Foods Westlake,Seattle,WA,98121,5643,
+Whole Foods Market:Wichita - Webb,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,512-477-4455,0,High,90,,8108,Whole Foods Wichita,Wichita,KS,67206,5643,
+Breadroot Natural Foods Co Op,Independent - Non-Grocery,100 East Blvd. N,Rapid City,SD,57701,grocerymanager@breadroot.com,(605) 348-3331,0,Review,77,,7574,Tao Natural Foods,Minneapolis,MN,55405,,
+Camas Organic Market,,300 Main St.,Hot Springs,MT,59845,camasfoods@gmail.com,(406) 741-2148,0,Review,77,,8241,Highlands Organic Market,Kennewick,WA,99336,,
+Chicos Market,Independent (deleted),1168 Leavenworth Street,San Francisco,CA,94109,info@chicosmarketsf.com,(415) 775-9812,0,Review,77,,5666,Basics Market,,,,,
+Dare Gift Box,,43778 Lees mill Square,LEESBURG,VA,20176,colleen@daregiftboxes.com,,0,Review,78,,8461,BOXED Gift Co.,Mokena,IL,60448,,
+KeHE Distributors:Elkton - Deer Park,Distributor,"Attn: Accounts Payable
+PO Box 24830",Jacksonville,FL,32241,aptradeinvoices@kehe.com,,0,Review,88,,5919,KeHE Elkton - Deerpark,Elkton,FL,32033,5605,
+Kings Market,,160 Spring St. W.,Friday Harbor,WA,98250,"jody.clark@kings-market.com, andrew.corey@kings-market.com",(360) 378-4505,0,Review,87,,5922,Ken's Market,Seattle,WA,98103,,
+MANZANITA FRESH FOODS:Fresh Foods Market - Cannon Beach,,730 MANZANITA AVE,Manzanita,OR,97130,jason@freshfoodsmarketplace.com,,0,Review,71,"zip,city",8918,Fresh Foods Marketplace - Cannon Beach,Manzanita,OR,97130,5675,
+Natural Grocers Corporate:- Warr Acres,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,395.45,Review,76,,8641,Red Barn Natural Grocery,Eugene,OR,97402,,
+Natural Grocers Corporate:Lakewood - Wadsworth,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(303) 989-4866,0,Review,77,city,6116,Natural Grocers Lakewood - Colfax,Lakewood,CO,80215,5620,
+Natural Grocers Corporate:Natural Grocers - Brownstone TX,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,Review,88,,8919,"Natural Grocers - Brownsville, TX",Brownsville,TX,78526,5620,
+Natural Grocers Corporate:Natural Grocers - North Brighton,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,164.85,Review,79,,6040,Natural Grocers Denver - Brighton,Denver,CO,80216,5620,
+Natural Grocers Corporate:Natural Grocers-Pearl Street,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,Review,76,,6018,Natural Grocers Boulder - Pearl,Boulder,CO,80302,5620,
+New Seasons Corporate:Mercer Island - 77th,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,ap@newseasonsmarket.com,(206) 232-2577,0,Review,65,phone,8243,Metropolitan Market Mercer Island - 77th,Mercer Island,WA,98040,5614,
+New Seasons Corporate:New Seasons - Vancouver 1506,,"1300 SE Stark Street, Suite 401  Portland",,,,ap@newseasonsmarket.com,,0,Review,79,,8841,New Seasons Market - Downtown Vancouver,Vancouver,WA,98660,5623,
+Paradigm Food Works,Distributor,"5875 Lakeview Blvd #102 , OR",Lake Oswego,OR,97035,jmorris@paradigmfoodworks.com,,1350,Review,62,zip,8891,Paradigm Foodworks Distribution,Beaverton,OR,97035,,
+Rising Tide Community Market,,323 Main Street,Damariscotta,ME,04543,andrew.c@risiingtide.coop,(207) 563-5556,0,Review,76,,5570,Gus's Community Market,,,,,
+Sunrise Natural Foods,Independent - Non-Grocery,1950 Douglas Blvd.,Roseville,CA,95661,kole@sunrisenaturalfoods.net,(916) 789-8591,0,Review,84,,8859,Sundance Natural Foods,Eugene,OR,97405,,
+Treebird Family Grocery,,106 OR-35,Hood River,OR,97031,orders@treebirdmarket.com,,0,Review,69,"zip,city",8877,TreeBird Family Market - Hood River,Hood River,OR,97031,,
+Whole Foods Market:- Berkely Telegraph,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,Review,75,,7865,Whole Foods Market Berkeley,Berkeley,CA,94705,5643,
+Whole Foods Market:- Haight,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,Review,86,,7989,Whole Foods Raleigh,Raleigh,NC,27607,5643,
+Whole Foods Market:- Oakland Bay Place,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,Review,77,,7953,Whole Foods Orland Park,Orland Park,IL,60462,5643,
+Whole Foods Market:- Ocean Ave,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,Review,81,,7926,Whole Foods Montana Avenue,Santa Monica,CA,90403,5643,
+Whole Foods Market:- Reno,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,Review,88,,7993,Whole Foods Reston,Reston,VA,22091,5643,
+Whole Foods Market:- Santa Clara Augustine Drive,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,Review,77,,7897,Whole Foods Market Santa Clara,Santa Clara,CA,95053,5643,
+Whole Foods Market:Albuquerque - Wyoming,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(505) 856-0474,0,Review,63,phone,7635,Whole Foods Acadamy,Albuquerque,NM,87109,5643,
+Whole Foods Market:Denver - 1st,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(720) 941-4100,0,Review,65,phone,7710,Whole Foods Cherry Creek,Denver,CO,80206,5643,
+Whole Foods Market:Denver - Hampden,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(303) 488-2000,0,Review,63,phone,8053,Whole Foods Tamarac,Denver,CO,80231,5643,
+Whole Foods Market:Draper - State,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,512-477-4455,0,Review,78,,8007,Whole Foods Santa Barbara,Santa Barbara,CA,93105,5643,
+Whole Foods Market:Portland - Burnside,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,Product.AP@wholefoods.com,(503) 232-6601,121.02,Review,84,,7983,Whole Foods Portland-Bayside West,Portland,ME,4101,5643,
+Whole Foods Market:Portland - Couch,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,Product.AP@wholefoods.com,512-477-4455,0,Review,66,"phone,city",7729,Whole Foods Corp Office (World),Austin,TX,,5643,
+Whole Foods Market:Portland - Sandy,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(503) 284-2644,0,Review,64,phone,7806,Whole Foods Hollywood,Portland,OR,97213,5643,
+Whole Foods Market:Salt Lake City - 700,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,"orders@treehouseoriginals.com, austin.bennett@wholefoods.com",512-477-4455,0,Review,76,,8004,Whole Foods Rose City,Madison,NJ,7940,5643,
+Whole Foods Market:Seattle - 64th,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,Product.AP@wholefoods.com,512-477-4455,0,Review,77,,7634,Whole Foods 119th St.,Overland Park,KS,66209,5643,
+Whole Foods Market:Vancouver - 160th,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(360) 253-4082,0,Review,79,,8099,Whole Foods West Vancouver,West Vancouver,BC,,5643,
+3155 NW Yeon Ave Portland OR 97210,,,,,,,,0,No match,,,,,,,,,Likely not a real customer (channel/test/address)
+42courses.com,,,,,,,,0,No match,,,,,,,,,
+Allmerica Financial Benefit Ins Co,,,,,,,,0,No match,,,,,,,,,
+Assurant,Independent - Non-Grocery,2871 Donamire Lane NW,Kennesaw,GA,20144,michele.greenawalt@assurant.com,(404) 539-4961,0,No match,,,,,,,,,
+Berkshire Food Co-op,,34 Bridge Street,Great Barrington,MA,01230,jbosworth@berkshire.coop,(413) 528-9697,0,No match,,,,,,,,,
+Best friends music,,,,,,Carolina@bestfriendsmusic.com,,0,No match,,,,,,,,,
+Cloquet Natural Foods,,502 Carlton Ave.,Cloquet,MN,55720,theorganiccarrot@gmail.com,(218) 879-3243,0,No match,,,,,,,,,
+Columbia Hardware,,,,,,,,0,No match,,,,,,,,,
+Dickey Farms,,"806 W Steuben St,",Bingen,WA,98605,store@dickeyfarmsinc.com,(509) 493-2636,0,No match,,,,,,,,,
+DPI Specialty Foods (CORPORATE),,601 Rockefeller Ave.,Ontarior,CA,91761,DPI-AP@dpispecialityfoods.com,(909) 975-1019,0,No match,,,,,,,,,
+DPI Specialty Foods (CORPORATE):DPI Specialty Foods - SW Leveton,Distributor,"DPI NW - AP Address
+601 Rockefeller Ave.",Ontario,CA,91761,DPI-AP@dpispecialtyfoods.com,(909) 975-1019,0,No match,,,,,,,,,
+Earthly Gourmet - Customer,,2143 SE Lafayette St,Portland,OR,97202,order@earthlygourmet.com,,0,No match,,,,,,,,,Likely not a real customer (channel/test/address)
+Etsy,,,,,,,,0,No match,,,,,,,,,Likely not a real customer (channel/test/address)
+Faire Customer,,,,,,,,0,No match,,,,,,,,,Likely not a real customer (channel/test/address)
+Food Fight Grocery:Portland - Stark,,1217 SE Stark St,Portland,OR,97214,"stark@foodfightgrocery.com, chad@foodfightgrocery.com",(503) 233-3910,0,No match,,,,,,,,,
+Freightquote,,,,,,,,0,No match,,,,,,,,,
+Harbor Freight Tools,,,,,,,,0,No match,,,,,,,,,
+Le Labo,,1308 W Burnside St,Portland,OR,97210,mbwalny@gmail.com,(971) 940-9132,0,No match,,,,,,,,,
+Mable Wholesale,,,,,,,,0,No match,,,,,,,,,
+MakeLike,,3701 SE BELMONT ST,Portland,OR,97214,tara@makelike.com,(503) 233-4843,0,No match,,,,,,,,,
+Materclass.com,,,,,,,,0,No match,,,,,,,,,
+Melinda McKee,,,,,,melinda@mementoandmuse.com,,0,No match,,,,,,,,,
+Mountn Barrel,,2218 Montello Ave,Hood River,OR,97031,bethany@mountnbarrel.com,‭+1 (414) 839-5286‬,0,No match,,,,,,,,,
+Natural Grocers Corporate:Centennial - S. University,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,No match,,,,,,,,,
+Natural Grocers Corporate:Fort Worth - Tarrant,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(817) 788-4576,0,No match,,,,,,,,,
+Natural Grocers Corporate:Mission - Shawnee Mission,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,No match,,,,,,,,,
+Natural Grocers Corporate:Natural Grocers - 712 W. Telegraph,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,No match,,,,,,,,,
+Natural Grocers Corporate:Prescott - Gail Gardner,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,0,No match,,,,,,,,,
+Natural Grocers Corporate:Spokane - Division 2,Natural Grocers,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,(509) 489-9900,0,No match,,,,,,,,,
+Natural Grocers Corporate:Vancouver - 192ND Ave,,12612 W Alameda Pkwy,Lakewood,CO,80228,invoicemailbox@naturalgrocers.com,,225.95,No match,,,,,,,,,
+Natures Health Food & Cafe,,555 S. Sunrise Way #301,Palm Springs,CA,92264,naturesnaturalhealth@dc.rr.com,(760) 323-9487,0,No match,,,,,,,,,
+New Seasons Corporate:Seattle - Ballard,New Seasons,2004 North Vancouver Ave,Portland,OR,97227,"justint@newseasonsmarket.com, ap@newseasonsmarket.com",(206) 789-4800,0,No match,,,,,,,,,
+NU Car Rentals,,,,,,,,0,No match,,,,,,,,,
+Oliver Lemons - Terrebonne,,"8431 11th St,",Terrebonne,OR,97760,,,147.9,No match,,,,,,,,,
+Port of KlickitatDemo,,154 E Bingen Point Way Ste A,Cook,WA,98605,,,0,No match,,,,,,,,,Likely not a real customer (channel/test/address)
+"Prometheus Real Estate Group, Inc.",Independent - Non-Grocery,1900 South Norfolk Street,San Mateo,CA,94403,,,0,No match,,,,,,,,,
+Rainbow Foods,,224 W. 4th St.,Juneau,AK,99801,rainbowbookkeeper@gmail.com,(907) 586-6476,0,No match,,,,,,,,,
+Secret Supper,,,,,,,,0,No match,,,,,,,,,
+Shop Pay,,,,,,,,0,No match,,,,,,,,,Likely not a real customer (channel/test/address)
+Shopify Customer - Treehouse Chocolate,Chain (deleted),,,,,,,0,No match,,,,,,,,,Likely not a real customer (channel/test/address)
+Shopify Customer - Treehouse Originals,,,,,,,,0,No match,,,,,,,,,Likely not a real customer (channel/test/address)
+Timberline Lodge:Timberline Airport,Chain (deleted),27500 E Timberline Rd,Government Camp,OR,97028,"lcanham@timberlinelodge.com, retailinvoices@timberlinelodge.com",,0,No match,,,,,,,,,
+Timberline Lodge:Timberline Lodge Wy'East Store,Chain (deleted),27500 E Timberline Rd,Government Camp,OR,97028,"lcanham@timberlinelodge.com, retailinvoices@timberlinelodge.com",,0,No match,,,,,,,,,
+Treehouse Chocolate,Chain (deleted),,,,,"aaron@treehousechocolate.com, dean.huang@apexglobe.com",,0,No match,,,,,,,,,
+Treehouse Originals,,,,,,,,0,No match,,,,,,,,,
+TSD Logistics,,,,,,,,0,No match,,,,,,,,,
+United Natural Grocers,Chain (deleted),"UNFI - Accounts Payable
+1 Albion Rd, Suite 101",Lincoln,RI,02865,UNFIAPInvoices@unfi.com,01-528-85634 X31599,0,No match,,,,,,,,,
+Vitamins Plus 200,,2321 W Loop 281,Longview,TX,75604,"vitaminsplus200@gibsonmdse.com,adam@blueskyrepresentation.com",(903) 295-7716,0,No match,,,,,,,,,
+Vitamins Plus 240,,9112 N Rodney Parham Rd #110,Little Rock,AR,72205,vitaminsplus240@gibsonmdse.com,,0,No match,,,,,,,,,
+Vitamins Plus 273,,5900 Bosque Blvd,Waco,TX,76710,vitaminsplus273@gibsonmdse.com,,0,No match,,,,,,,,,
+Washington State Treasurer,,,,,,,,0,No match,,,,,,,,,
+Whole Foods Market:- Napa Bel Aire Plaza,,"Whole Foods Market, Inc.
+550 Bowie St",Austin,TX,78703-4644,"product.ap@wholefoods.com, APPortalSupport@wholefoods.com",,0,No match,,,,,,,,,
+Whole Foods Market:Albuquerque - Carlisle,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,,(505) 260-1366,0,No match,,,,,,,,,
+Whole Foods Market:Centennial - York,Whole Foods,"Whole Foods Market, Inc.
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,(303) 996-3660,0,No match,,,,,,,,,
+Whole Foods Market:Littleton - Wadsworth,Whole Foods,"Whole Foods Market, Inc._x000D_
+550 Bowie Street",Austin,TX,78703-4644,orders@treehouseoriginals.com,512-477-4455,0,No match,,,,,,,,,
+Yoga + Beer,,PO Box 802,Salem,OR,97308,mikkitrow@gmail.com,,0,No match,,,,,,,,,

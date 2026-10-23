@@ -2,7 +2,7 @@
 
 Usage:
     python scripts/link_qbo_customers_from_xlsx.py QB_to_CustomerList_Match.xlsx --dry-run
-    python scripts/link_qbo_customers_from_xlsx.py QB_to_CustomerList_Match.xlsx
+    python scripts/link_qbo_customers_from_xlsx.py data/QB_to_CustomerList_Match.csv   # the "QB matches" sheet as CSV
 
 Reads the "QB matches" sheet (qb_name, match_conf, name_score, evidence, cl_id,
 cl_name...) and links each row whose match_conf is "High": the app customer
@@ -56,6 +56,13 @@ def _alnum(value) -> str:
 
 
 def load_rows(path: str) -> list[dict]:
+    if path.lower().endswith(".csv"):
+        with open(path, newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+        needed = {"qb_name", "match_conf", "cl_id", "cl_name"}
+        if rows and not needed <= set(rows[0]):
+            sys.exit(f"The CSV needs these columns: {', '.join(sorted(needed))}. Found: {list(rows[0])}")
+        return rows
     workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
     sheet = workbook[SHEET_NAME] if SHEET_NAME in workbook.sheetnames else workbook.worksheets[0]
     rows = list(sheet.iter_rows(values_only=True))
