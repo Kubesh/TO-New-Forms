@@ -38,13 +38,17 @@ SUPPORT_EMAIL = "adrian@rznce.com"
 def quickbooks_page() -> None:
     st.title("QuickBooks")
     st.caption(f"Questions or problems with the QuickBooks connection? Contact {SUPPORT_EMAIL}.")
-    tab_status, tab_customers, tab_items = st.tabs(["Connection", "Customers", "Items"])
+    tab_status, tab_customers, tab_items, tab_invoicing = st.tabs(
+        ["Connection", "Customers", "Items", "Invoicing"]
+    )
     with tab_status:
         _render_status()
     with tab_customers:
         _render_customers()
     with tab_items:
         _render_items()
+    with tab_invoicing:
+        _render_invoice_numbering()
 
 
 # --- connection -------------------------------------------------------------
@@ -81,7 +85,9 @@ def _render_status() -> None:
     st.write(
         f"**Sellable SKUs linked:** {sum(1 for i in items if i.item_id in item_links)} of {len(items)}"
     )
-    _render_invoice_numbering()
+
+
+# --- invoicing --------------------------------------------------------------
 
 
 def _lock_invoice_numbering() -> None:
@@ -95,7 +101,6 @@ def _unlock_invoice_numbering() -> None:
 
 
 def _render_invoice_numbering() -> None:
-    st.divider()
     st.markdown("**Invoice numbering**")
     st.caption(
         "Invoices created from POs are numbered by this app: the prefix plus the next number. "
