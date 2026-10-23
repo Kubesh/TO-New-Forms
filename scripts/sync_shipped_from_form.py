@@ -126,7 +126,7 @@ class RunLogCollector(logging.Handler):
         )
 
 
-def process_responses(conn, args, rows) -> tuple[int, int]:
+def process_responses(conn, args, rows, run_id=None) -> tuple[int, int]:
     """Returns (new responses seen, POs shipped). Raises SystemExit(1) when
     there is no saved position and no --since."""
     stored = conn.execute(
@@ -179,6 +179,22 @@ def process_responses(conn, args, rows) -> tuple[int, int]:
                 {"ts": submitted_at, "id": po.po_id},
             )
             shipped += result.rowcount
+            if result.rowcount:
+                conn.execute(
+                    text(
+                        "INSERT INTO sheet_sync_shipments "
+                        "(job, run_id, po_id, po_number, shipped_at, marked_at) "
+                        "VALUES (:job, :run_id, :po_id, :po_number, :shipped_at, :now)"
+                    ),
+                    {
+                        "job": JOB,
+                        "run_id": run_id,
+                        "po_id": po.po_id,
+                        "po_number": po.po_number,
+                        "shipped_at": submitted_at,
+                        "now": datetime.now(),
+                    },
+                )
             logger.info("%s: shipped PO %s", submitted_at, po_number)
 
     if not args.dry_run:
@@ -224,7 +240,7 @@ def main() -> int:
     try:
         rows = read_form_rows()
         with engine.begin() as conn:
-            seen, shipped = process_responses(conn, args, rows)
+            seen, shipped = process_responses(conn, args, rows, run_id)
         logger.info("%d new response(s), %d PO(s) shipped", seen, shipped)
     except SystemExit as exc:
         status, exit_code = "error", int(exc.code or 1)

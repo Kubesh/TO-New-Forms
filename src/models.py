@@ -539,3 +539,19 @@ class SheetSyncRunLog(Base):
     message: Mapped[str] = mapped_column(Text, nullable=False)
 
     run: Mapped["SheetSyncRun"] = relationship(back_populates="logs")
+
+
+class SheetSyncShipment(Base):
+    """A PO a sync script marked shipped. shipped_at is the form timestamp it
+    was given as its ship date, marked_at when the script actually did it.
+    Outlives the run it came from (run_id goes null when old runs are pruned)."""
+
+    __tablename__ = "sheet_sync_shipments"
+
+    shipment_id: Mapped[int] = mapped_column(primary_key=True)
+    job: Mapped[str] = mapped_column(String(100), nullable=False)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("sheet_sync_runs.run_id"))
+    po_id: Mapped[int | None] = mapped_column(ForeignKey("po_headers.po_id"))
+    po_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    shipped_at: Mapped[datetime] = mapped_column(nullable=False)
+    marked_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
