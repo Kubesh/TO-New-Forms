@@ -221,6 +221,9 @@ st.markdown(
         padding: 0.55rem 1.6rem;
         min-height: 0;
     }
+    [class*="st-key-tp-help-button"] button p {
+        font-size: 1.2rem;
+    }
     [class*="st-key-tp-help-button"] button:hover,
     [class*="st-key-tp-help-button"] button:focus:not(:active) {
         background: #D94A0E;
