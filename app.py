@@ -11,6 +11,7 @@ from src.pages_app.categories import categories_page
 from src.pages_app.customer_types import customer_types_page
 from src.pages_app.customers import customers_page
 from src.pages_app.google_sheets import google_sheets_page
+from src.pages_app.help import render_help_button
 from src.pages_app.inventory import inventory_page
 from src.pages_app.items import items_page
 from src.pages_app.production import production_page
@@ -204,6 +205,20 @@ st.markdown(
         font-size: 0.85rem;
         letter-spacing: 0.03em;
     }
+    /* The Help button sits in the top right, over the (empty) header bar. */
+    [class*="st-key-tp-help-button"] {
+        position: fixed !important;
+        top: 0.55rem;
+        right: 1rem;
+        width: auto !important;
+        z-index: 1000000;
+    }
+    [class*="st-key-tp-help-button"] button {
+        border: 2px solid #1A1712;
+        font-weight: 600;
+        padding: 0.2rem 0.9rem;
+        min-height: 0;
+    }
     [class*="st-key-tp-sidebar-subnav"] [data-testid="stPageLink"] {
         margin-left: 1.1rem;
         font-size: 0.78rem;
@@ -377,5 +392,9 @@ with st.sidebar:
         """,
         height=1,
     )
+
+# Help is per page, keyed by the page's URL path; the default page (Customers)
+# reports an empty path.
+render_help_button(pg.url_path or "customers", pg.title)
 
 pg.run()

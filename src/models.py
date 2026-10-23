@@ -222,6 +222,17 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 
 
+class HelpPage(Base):
+    """The help text (markdown) for one app page, keyed by its URL path
+    (e.g. "customer-types"). See src/services/help_pages.py."""
+
+    __tablename__ = "help_pages"
+
+    page_key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+
+
 class QboConnection(Base, TimestampMixin):
     """The authorised QuickBooks Online company. Tokens are rotated by Intuit
     on every refresh, so the latest ones must always be the ones saved."""
