@@ -81,6 +81,66 @@ def _render_status() -> None:
     st.write(
         f"**Sellable SKUs linked:** {sum(1 for i in items if i.item_id in item_links)} of {len(items)}"
     )
+    _render_invoice_numbering()
+
+
+def _lock_invoice_numbering() -> None:
+    st.session_state["qbo_numbering_unlocked"] = False
+    st.session_state.pop("qbo_numbering_prefix", None)
+    st.session_state.pop("qbo_numbering_next", None)
+
+
+def _unlock_invoice_numbering() -> None:
+    st.session_state["qbo_numbering_unlocked"] = True
+
+
+def _render_invoice_numbering() -> None:
+    st.divider()
+    st.markdown("**Invoice numbering**")
+    st.caption(
+        "Invoices created from POs are numbered by this app: the prefix plus the next number. "
+        "If someone creates an invoice in QuickBooks by hand using a number from this series, "
+        "move the next number past it."
+    )
+    with session_scope() as session:
+        prefix = qbo_sync.get_invoice_prefix(session)
+        next_number = qbo_sync.peek_next_invoice_number(session)
+
+    if not st.session_state.get("qbo_numbering_unlocked"):
+        st.metric("Next invoice number", f"{prefix}{next_number}")
+        st.button("Unlock", key="qbo_numbering_unlock", on_click=_unlock_invoice_numbering)
+        return
+
+    st.warning(
+        "This changes the number on every invoice created from now on. The next number can "
+        "only be raised, never lowered."
+    )
+    new_prefix = st.text_input(
+        "Prefix", value=prefix, max_chars=10, key="qbo_numbering_prefix"
+    ).strip()
+    new_next = st.number_input(
+        "Next number",
+        min_value=next_number,
+        value=next_number,
+        step=1,
+        key="qbo_numbering_next",
+    )
+    st.markdown(f"**Next invoice number:** {new_prefix}{int(new_next)}")
+    col_save, col_cancel, _ = st.columns([1, 1, 3])
+    with col_save:
+        save = st.button("Save", type="primary", width="stretch", key="qbo_numbering_save")
+    with col_cancel:
+        st.button("Cancel", width="stretch", key="qbo_numbering_cancel", on_click=_lock_invoice_numbering)
+    if save:
+        try:
+            with session_scope() as session:
+                qbo_sync.update_invoice_numbering(session, new_prefix, int(new_next))
+        except ValueError as exc:
+            st.error(str(exc))
+        else:
+            _lock_invoice_numbering()
+            st.toast(f"Next invoice number is now {new_prefix}{int(new_next)}.")
+            st.rerun()
 
 
 

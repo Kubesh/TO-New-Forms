@@ -37,6 +37,7 @@ from src.models import (
     QboItemLink,
 )
 from src.services import quickbooks as qb
+from src.services.app_settings import get_setting, set_setting
 from src.services.customers import format_phone_number, format_postal_code, normalize_emails
 from src.services.order_types import is_faire_order
 from src.services.pricing import line_amount, resolve_prices
@@ -44,8 +45,11 @@ from src.services.purchase_orders import get_purchase_order, price_unpriced_line
 
 SEARCH_LIMIT = 25
 # Invoices get their number from the app (QuickBooks' own numbering is off),
-# as <prefix><next number from qbo_invoice_number_seq>.
-INVOICE_NUMBER_PREFIX = os.environ.get("QBO_INVOICE_PREFIX", "O-")
+# as <prefix><next number from qbo_invoice_number_seq>. The prefix is set in the
+# app (app_settings); QBO_INVOICE_PREFIX is only the default before it is.
+INVOICE_PREFIX_KEY = "qbo_invoice_prefix"
+DEFAULT_INVOICE_PREFIX = os.environ.get("QBO_INVOICE_PREFIX", "O-")
+INVOICE_PREFIX_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,10}")
 
 
 class InvoiceBlocked(Exception):
@@ -502,8 +506,64 @@ def check_invoice(session: Session, po: PurchaseOrder) -> InvoiceCheck:
     return check
 
 
+def get_invoice_prefix(session: Session) -> str:
+    return get_setting(session, INVOICE_PREFIX_KEY) or DEFAULT_INVOICE_PREFIX
+
+
+def _clean_invoice_prefix(prefix: str) -> str:
+    prefix = (prefix or "").strip()
+    if not INVOICE_PREFIX_PATTERN.fullmatch(prefix):
+        raise ValueError(
+            "The prefix can be 1 to 10 letters, numbers, dashes, dots or underscores (no spaces)."
+        )
+    return prefix
+
+
+def set_invoice_prefix(session: Session, prefix: str) -> None:
+    set_setting(session, INVOICE_PREFIX_KEY, _clean_invoice_prefix(prefix))
+
+
+def peek_next_invoice_number(session: Session) -> int:
+    """The number the next invoice will get, without using it up."""
+    last_value, is_called = session.execute(
+        text("SELECT last_value, is_called FROM qbo_invoice_number_seq")
+    ).one()
+    return last_value + 1 if is_called else last_value
+
+
+def set_next_invoice_number(session: Session, number: int) -> None:
+    """Moves the counter so the next invoice gets `number`. It can only go up
+    (or stay put): a lower number could repeat one already used."""
+    if number < 1:
+        raise ValueError("The invoice number must be 1 or more.")
+    # One statement, so the check and the move can't be split by another
+    # invoice taking a number in between.
+    moved = session.execute(
+        text(
+            "SELECT setval('qbo_invoice_number_seq', CAST(:n AS bigint), false) WHERE CAST(:n AS bigint) >= "
+            "(SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END "
+            "FROM qbo_invoice_number_seq)"
+        ),
+        {"n": number},
+    ).first()
+    if moved is None:
+        current = peek_next_invoice_number(session)
+        session.rollback()
+        raise ValueError(f"The next number can't go backwards - it is already {current}.")
+    session.commit()
+
+
+def update_invoice_numbering(session: Session, prefix: str, number: int) -> None:
+    """Sets the prefix and the next number together. Both are checked before
+    either is saved, so a refused number never leaves a half-applied change."""
+    prefix = _clean_invoice_prefix(prefix)
+    set_next_invoice_number(session, number)  # refuses to go backwards
+    set_invoice_prefix(session, prefix)
+
+
 def next_invoice_number(session: Session) -> str:
-    return f"{INVOICE_NUMBER_PREFIX}{session.scalar(text('SELECT nextval(\'qbo_invoice_number_seq\')'))}"
+    prefix = get_invoice_prefix(session)
+    return f"{prefix}{session.scalar(text('SELECT nextval(\'qbo_invoice_number_seq\')'))}"
 
 
 def _invoice_number_for_attempt(session: Session, po_id: int, realm: str) -> str:
