@@ -214,21 +214,13 @@ st.markdown(
         z-index: 1000000;
     }
     [class*="st-key-tp-help-button"] button {
-        background: #F4591A;
-        border: 2px solid #F4591A;
-        color: #FFFFFF;
+        border: 2px solid #1A1712;
         font-weight: 700;
         padding: 0.55rem 1.6rem;
         min-height: 0;
     }
     [class*="st-key-tp-help-button"] button p {
         font-size: 1.2rem;
-    }
-    [class*="st-key-tp-help-button"] button:hover,
-    [class*="st-key-tp-help-button"] button:focus:not(:active) {
-        background: #D94A0E;
-        border-color: #D94A0E;
-        color: #FFFFFF;
     }
     [class*="st-key-tp-sidebar-subnav"] [data-testid="stPageLink"] {
         margin-left: 1.1rem;
