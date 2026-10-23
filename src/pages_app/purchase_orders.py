@@ -18,7 +18,6 @@ from src.services.pricing import line_amount, order_total
 from src.services.po_sheets_sync import SheetLayoutError, remove_line_items, sync_purchase_order
 from src.services.purchase_orders import (
     add_line_item,
-    price_unpriced_lines,
     count_purchase_orders,
     create_purchase_order,
     delete_purchase_order,
@@ -857,27 +856,9 @@ def _render_detail(po_id: int) -> None:
                 row["Amount"] = f"${amount:,.2f}" if amount is not None else "—"
             rows.append(row)
         st.dataframe(rows, width="stretch", hide_index=True)
-        total, unpriced = order_total(po.line_items)
+        total, _ = order_total(po.line_items)
         if has_prices:
             st.write(f"**Order total:** ${total:,.2f}")
-        if unpriced:
-            st.caption(
-                f"{unpriced} line{'s' if unpriced != 1 else ''} with no price yet - "
-                "set it on the customer or customer type Pricing tab, then apply it here. "
-                "It isn't in the total, and the order can't go to QuickBooks until every "
-                "line is priced."
-            )
-            if po.customer_id and st.button(
-                "Apply current pricing to unpriced lines", key="apply_pricing_btn"
-            ):
-                with session_scope() as session:
-                    filled = price_unpriced_lines(session, po.po_id)
-                st.toast(
-                    f"Priced {filled} line{'s' if filled != 1 else ''}."
-                    if filled
-                    else "No pricing is set for those items yet."
-                )
-                st.rerun()
     else:
         st.write("No line items on file.")
 
