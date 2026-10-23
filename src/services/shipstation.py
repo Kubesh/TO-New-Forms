@@ -159,7 +159,38 @@ def configured_shipping_method(session) -> dict | None:
     }
 
 
-def build_order_payload(po: PurchaseOrder, sequence: int = 1, shipping: dict | None = None) -> dict:
+# Chosen on the ShipStation page. The store falls back to SHIPSTATION_STORE_ID
+# in .env until one is saved there; insurance is empty (ShipStation's own
+# default) or "carrier".
+STORE_SETTING_KEYS = ("shipstation_store_id", "shipstation_store_name")
+INSURANCE_SETTING_KEY = "shipstation_insurance"
+
+
+def _env_store_id() -> int | None:
+    raw = os.environ.get("SHIPSTATION_STORE_ID", "").strip()
+    return int(raw) if raw.isdigit() else None
+
+
+def configured_order_options(session) -> dict:
+    """{"store_id", "store_name", "insurance"} for new orders; each None when
+    it should be left to ShipStation's own default."""
+    from src.services.app_settings import get_settings
+
+    saved = get_settings(session, [*STORE_SETTING_KEYS, INSURANCE_SETTING_KEY])
+    raw_store = (saved.get("shipstation_store_id") or "").strip()
+    return {
+        "store_id": int(raw_store) if raw_store.isdigit() else _env_store_id(),
+        "store_name": saved.get("shipstation_store_name") or None,
+        "insurance": saved.get(INSURANCE_SETTING_KEY) or None,
+    }
+
+
+def build_order_payload(
+    po: PurchaseOrder,
+    sequence: int = 1,
+    shipping: dict | None = None,
+    options: dict | None = None,
+) -> dict:
     """The createorder body for a PO. Needs po.customer and the line items
     (and each line's item) loaded - see get_purchase_order.
 
@@ -215,9 +246,10 @@ def build_order_payload(po: PurchaseOrder, sequence: int = 1, shipping: dict | N
         "customField1": po.po_number,
         "customField2": str(po.po_id),
     }
-    store_id = os.environ.get("SHIPSTATION_STORE_ID")
+    options = options or {}
+    store_id = options.get("store_id") or _env_store_id()
     if store_id:
-        advanced_options["storeId"] = int(store_id)
+        advanced_options["storeId"] = store_id
 
     payload = {
         "orderNumber": order_number_for(po, sequence),
@@ -232,6 +264,10 @@ def build_order_payload(po: PurchaseOrder, sequence: int = 1, shipping: dict | N
     if shipping:
         payload["carrierCode"] = shipping["carrier_code"]
         payload["serviceCode"] = shipping["service_code"]
+    if options.get("insurance") == "carrier":
+        # No prices go to ShipStation, so there's no declared value to send: this
+        # only preselects Carrier insurance (value 0), as picking it by hand does.
+        payload["insuranceOptions"] = {"provider": "carrier", "insureShipment": True, "insuredValue": 0}
     weight_lb, _ = order_weight_lb(po)
     if weight_lb is not None:
         payload["weight"] = {"value": float(round(weight_lb, 3)), "units": "pounds"}
@@ -269,12 +305,20 @@ def _request(method: str, path: str, **kwargs) -> dict:
     return response.json()
 
 
-def send_order(po: PurchaseOrder, sequence: int = 1, shipping: dict | None = None) -> dict:
+def send_order(
+    po: PurchaseOrder,
+    sequence: int = 1,
+    shipping: dict | None = None,
+    options: dict | None = None,
+) -> dict:
     """Creates a new order in ShipStation for this send of the PO. Returns
     ShipStation's order record, which includes 'orderId'. `shipping` (see
-    configured_shipping_method) sets the carrier and service on the order."""
+    configured_shipping_method) sets the carrier and service on the order;
+    `options` (configured_order_options) the store and insurance."""
     order = _request(
-        "POST", "/orders/createorder", json=build_order_payload(po, sequence, shipping)
+        "POST",
+        "/orders/createorder",
+        json=build_order_payload(po, sequence, shipping, options),
     )
     _refuse_if_existing_order_was_updated(order)
     return order

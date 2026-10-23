@@ -10,6 +10,7 @@ from src.services.order_types import shipstation_block_reason
 from src.services.purchase_orders import get_purchase_order
 from src.services.shipstation import (
     ShipStationError,
+    configured_order_options,
     configured_shipping_method,
     get_labels_for_order,
     next_sequence,
@@ -131,7 +132,7 @@ def send_po(session: Session, po_id: int) -> dict:
     existing_keys = {send.order_key for send in list_sends_for_po(session, po_id)}
     sequence = next_sequence(po, existing_keys)
     shipping = configured_shipping_method(session)
-    order = send_order(po, sequence, shipping)
+    order = send_order(po, sequence, shipping, configured_order_options(session))
     record_send(session, po, order, order_key_for(po, sequence), order_number_for(po, sequence))
     weight_lb, missing = order_weight_lb(po)
     return {"order": order, "shipping": shipping, "weight_lb": weight_lb, "missing_weight_skus": missing}

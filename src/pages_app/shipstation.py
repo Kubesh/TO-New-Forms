@@ -1,5 +1,3 @@
-import os
-
 import pandas as pd
 import streamlit as st
 
@@ -9,7 +7,10 @@ from src.services.app_settings import set_setting
 from src.services.shipstation import (
     ShipStationError,
     ShipStationNotConfigured,
+    INSURANCE_SETTING_KEY,
+    STORE_SETTING_KEYS,
     check_connection,
+    configured_order_options,
     configured_shipping_method,
     list_carriers,
     list_services,
@@ -50,16 +51,11 @@ def shipstation_page() -> None:
                 hide_index=True,
                 width="stretch",
             )
-            st.caption(
-                "Set SHIPSTATION_STORE_ID in .env to a Store ID above to file new orders "
-                "under that store; leave it blank for ShipStation's default."
-            )
         except (ShipStationNotConfigured, ShipStationError) as exc:
             st.error(str(exc))
-    store_id = os.environ.get("SHIPSTATION_STORE_ID", "").strip()
-    st.write(f"**Store:** {store_id or 'ShipStation default'}")
-
+    _render_store()
     _render_shipping_method()
+    _render_insurance()
 
     st.subheader("Recent sends")
     _render_check_labels()
@@ -111,6 +107,106 @@ def _render_check_labels() -> None:
                     f"{result['found']} now have one."
                 )
     st.caption("Looks up label, tracking and carrier for every sent order that doesn't have a label yet.")
+
+
+def _render_store() -> None:
+    st.subheader("Store for new orders")
+    st.caption(
+        "Orders sent from a PO are filed under this ShipStation store (sales channel). "
+        "It can still be changed on the order in ShipStation."
+    )
+    try:
+        with session_scope() as session:
+            options = configured_order_options(session)
+    except RuntimeError as exc:
+        st.error(str(exc))
+        return
+    if options["store_id"]:
+        label = options["store_name"] or f"Store ID {options['store_id']}"
+        st.write(f"**Current:** {label}")
+    else:
+        st.write("**Current:** not set - ShipStation uses its own default.")
+
+    if st.button("Choose store…", key="ss_load_stores"):
+        try:
+            with st.spinner("Loading stores from ShipStation…"):
+                st.session_state["ss_stores"] = check_connection()
+        except (ShipStationNotConfigured, ShipStationError) as exc:
+            st.error(str(exc))
+    stores = st.session_state.get("ss_stores")
+    if stores is None:
+        return
+    if not stores:
+        st.info("ShipStation reports no stores on this account.")
+        return
+
+    def store_label(store: dict) -> str:
+        marketplace = store.get("marketplaceName")
+        inactive = "" if store.get("active", True) else " (inactive)"
+        name = store.get("storeName") or f"Store {store.get('storeId')}"
+        return f"{name} - {marketplace}{inactive}" if marketplace else f"{name}{inactive}"
+
+    current_index = next(
+        (i for i, store in enumerate(stores) if store.get("storeId") == options["store_id"]), 0
+    )
+    store = stores[
+        st.selectbox(
+            "Store",
+            range(len(stores)),
+            index=current_index,
+            format_func=lambda i: store_label(stores[i]),
+            key="ss_store_pick",
+        )
+    ]
+    col_save, col_clear = st.columns(2)
+    with col_save:
+        if st.button("Save as the default", type="primary", width="stretch", key="ss_save_store"):
+            with session_scope() as session:
+                set_setting(session, "shipstation_store_id", str(store["storeId"]))
+                set_setting(session, "shipstation_store_name", store_label(store))
+            st.session_state.pop("ss_stores", None)
+            st.toast(f"New orders will be filed under {store_label(store)}.")
+            st.rerun()
+    with col_clear:
+        if st.button("Use ShipStation's default", width="stretch", key="ss_clear_store"):
+            with session_scope() as session:
+                for key in STORE_SETTING_KEYS:
+                    set_setting(session, key, None)
+            st.session_state.pop("ss_stores", None)
+            st.rerun()
+
+
+INSURANCE_CHOICES = {"ShipStation's default": None, "Carrier": "carrier"}
+
+
+def _render_insurance() -> None:
+    st.subheader("Insurance for new orders")
+    st.caption(
+        "Choosing Carrier sets insurance to Carrier on every order sent from a PO, so it "
+        "doesn't have to be picked on each one in ShipStation. Prices aren't sent to "
+        "ShipStation, so the declared value stays at $0."
+    )
+    try:
+        with session_scope() as session:
+            current = configured_order_options(session)["insurance"]
+    except RuntimeError as exc:
+        st.error(str(exc))
+        return
+    labels = list(INSURANCE_CHOICES)
+    saved_label = next(label for label, value in INSURANCE_CHOICES.items() if value == current)
+    choice = st.radio(
+        "Insurance",
+        labels,
+        index=labels.index(saved_label),
+        horizontal=True,
+        label_visibility="collapsed",
+        key="ss_insurance_pick",
+    )
+    if choice != saved_label and st.button("Save", type="primary", key="ss_save_insurance"):
+        with session_scope() as session:
+            set_setting(session, INSURANCE_SETTING_KEY, INSURANCE_CHOICES[choice])
+        st.toast(f"New orders will use {choice} insurance." if INSURANCE_CHOICES[choice] else "New orders will use ShipStation's insurance default.")
+        st.rerun()
 
 
 def _is_fedex(option: dict) -> bool:
